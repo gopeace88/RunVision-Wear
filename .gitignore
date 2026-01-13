@@ -1,0 +1,20 @@
+# Gradle
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+
+# Local configuration
+local.properties
+
+# Android Studio
+*.iml
+.idea/
+.DS_Store
+
+# Generated files
+app/release/
+*.apk
+*.aab
+
+# Kotlin
+*.kotlin_module
