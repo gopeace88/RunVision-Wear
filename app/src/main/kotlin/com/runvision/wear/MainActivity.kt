@@ -46,7 +46,9 @@ class MainActivity : ComponentActivity() {
 
     companion object {
         private const val TAG = "MainActivity"
-        private const val DIM_BRIGHTNESS = 0.01f  // 1% brightness during exercise
+        private const val BRIGHT_BRIGHTNESS = 0.9f   // 90% brightness for first 5 seconds
+        private const val DIM_BRIGHTNESS = 0.05f   // 5% brightness after delay (very dim)
+        private const val BRIGHTNESS_DIM_DELAY_MS = 5_000L   // 5 seconds
     }
 
     // State for Compose UI (observed from Service)
@@ -60,6 +62,13 @@ class MainActivity : ComponentActivity() {
     private var exerciseService: ExerciseService? = null
     private var serviceBound = false
     private var navController: NavHostController? = null
+
+    // Brightness dimming handler
+    private val brightnessHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val dimRunnable = Runnable {
+        Log.d(TAG, "Dimming screen to $DIM_BRIGHTNESS after ${BRIGHTNESS_DIM_DELAY_MS}ms")
+        setBrightness(DIM_BRIGHTNESS)
+    }
 
     // Ambient Mode support
     private val ambientCallback = object : AmbientLifecycleObserver.AmbientLifecycleCallback {
@@ -236,7 +245,8 @@ class MainActivity : ComponentActivity() {
                             onStopClick = {
                                 stopRunning()
                                 nav.popBackStack()
-                            }
+                            },
+                            onScreenTouch = { wakeUpScreen() }
                         )
                     }
                 }
@@ -324,21 +334,45 @@ class MainActivity : ComponentActivity() {
 
     /**
      * Set screen mode for running/idle state
-     * - Running: Keep screen on with dim brightness (power saving)
+     * - Running: Bright for 10 seconds, then dim (power saving)
      * - Idle: Normal brightness, allow screen to turn off
      */
     private fun setScreenMode(running: Boolean) {
-        val layoutParams = window.attributes
         if (running) {
-            Log.d(TAG, "Setting screen mode: ON + DIM ($DIM_BRIGHTNESS)")
+            Log.d(TAG, "Setting screen mode: ON + BRIGHT (will dim after ${BRIGHTNESS_DIM_DELAY_MS}ms)")
             window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-            layoutParams.screenBrightness = DIM_BRIGHTNESS
+            setBrightness(BRIGHT_BRIGHTNESS)
+            // Schedule dimming after delay
+            brightnessHandler.removeCallbacks(dimRunnable)
+            brightnessHandler.postDelayed(dimRunnable, BRIGHTNESS_DIM_DELAY_MS)
         } else {
             Log.d(TAG, "Setting screen mode: NORMAL")
+            // Cancel scheduled dimming
+            brightnessHandler.removeCallbacks(dimRunnable)
             window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-            layoutParams.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+            setBrightness(WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE)
         }
+    }
+
+    /**
+     * Set screen brightness
+     */
+    private fun setBrightness(brightness: Float) {
+        val layoutParams = window.attributes
+        layoutParams.screenBrightness = brightness
         window.attributes = layoutParams
+    }
+
+    /**
+     * Wake up screen on touch - brighten and restart dim timer
+     */
+    private fun wakeUpScreen() {
+        if (isRunning.value) {
+            Log.d(TAG, "Screen touched - waking up brightness")
+            setBrightness(BRIGHT_BRIGHTNESS)
+            brightnessHandler.removeCallbacks(dimRunnable)
+            brightnessHandler.postDelayed(dimRunnable, BRIGHTNESS_DIM_DELAY_MS)
+        }
     }
 
     override fun onDestroy() {

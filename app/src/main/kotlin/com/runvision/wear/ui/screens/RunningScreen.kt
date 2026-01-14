@@ -1,12 +1,14 @@
 package com.runvision.wear.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -27,12 +29,13 @@ fun RunningScreen(
     isAmbient: Boolean = false,
     isPaused: Boolean = false,
     onPauseClick: () -> Unit,
-    onStopClick: () -> Unit
+    onStopClick: () -> Unit,
+    onScreenTouch: () -> Unit = {}
 ) {
     if (isAmbient) {
         AmbientRunningScreen(metrics)
     } else {
-        InteractiveRunningScreen(metrics, isPaused, onPauseClick, onStopClick)
+        InteractiveRunningScreen(metrics, isPaused, onPauseClick, onStopClick, onScreenTouch)
     }
 }
 
@@ -107,7 +110,8 @@ private fun InteractiveRunningScreen(
     metrics: RunningMetrics,
     isPaused: Boolean,
     onPauseClick: () -> Unit,
-    onStopClick: () -> Unit
+    onStopClick: () -> Unit,
+    onScreenTouch: () -> Unit
 ) {
     // Current time (updates with metrics)
     val currentTime = remember(metrics.elapsedSeconds) {
@@ -118,6 +122,11 @@ private fun InteractiveRunningScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onTap = { onScreenTouch() }
+                )
+            }
     ) {
         // Main content column - centered vertically
         Column(
