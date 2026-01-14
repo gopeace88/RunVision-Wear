@@ -25,7 +25,13 @@ data class RunningMetrics(
         }
 
     val distanceKmFormatted: String
-        get() = String.format("%.1f", distanceMeters / 1000f)
+        get() {
+            val km = distanceMeters / 1000f
+            // Use explicit formatting to avoid Locale issues (some locales use comma)
+            val intPart = km.toInt()
+            val decPart = ((km - intPart) * 10).toInt()
+            return "$intPart.$decPart"
+        }
 
     val distanceKm: Float
         get() = distanceMeters / 1000f

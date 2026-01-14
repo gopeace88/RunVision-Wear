@@ -30,12 +30,12 @@ fun MetricItem(
             painter = icon,
             contentDescription = null,
             tint = color,
-            modifier = Modifier.size(20.dp)
+            modifier = Modifier.size(26.dp)
         )
         Spacer(modifier = Modifier.width(4.dp))
         Text(
             text = value,
-            fontSize = 24.sp,
+            fontSize = 32.sp,
             fontWeight = FontWeight.Bold,
             color = Color.White
         )

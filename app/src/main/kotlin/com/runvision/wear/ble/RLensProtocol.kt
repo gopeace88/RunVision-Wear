@@ -122,6 +122,64 @@ object RLensProtocol {
     fun createPowerPacket(watts: Int): ByteArray =
         createPacket(METRIC_POWER, watts)
 
+    // ========== Current Time Packet for Elapsed Time ==========
+    // WORKAROUND: Send elapsed time using iLens's Current Time characteristic
+    // This allows pause/resume to work correctly (watch controls the time display)
+    // Reference: runvision-iq/source/ILensProtocol.mc:createCurrentTimePacket
+
+    /**
+     * Create Current Time packet with elapsed time
+     *
+     * Packet Structure (10 bytes):
+     *   [0-1]  year (UINT16, little-endian) - current date
+     *   [2]    month (UINT8, 1-12) - current date
+     *   [3]    day (UINT8, 1-31) - current date
+     *   [4]    hour (UINT8, 0-23) - ELAPSED hours
+     *   [5]    minute (UINT8, 0-59) - ELAPSED minutes
+     *   [6]    second (UINT8, 0-59) - ELAPSED seconds
+     *   [7]    dayOfWeek (UINT8, 1=Mon...7=Sun) - current
+     *   [8]    fraction256 (UINT8, 1/256 second) - always 0
+     *   [9]    reason (UINT8, 0x02=External Reference)
+     *
+     * @param elapsedSeconds Exercise elapsed time in seconds
+     * @return ByteArray 10-byte packet
+     */
+    fun createCurrentTimePacket(elapsedSeconds: Int): ByteArray {
+        val calendar = java.util.Calendar.getInstance()
+
+        // Year (UINT16, little-endian)
+        val year = calendar.get(java.util.Calendar.YEAR)
+
+        // Month (1-12)
+        val month = calendar.get(java.util.Calendar.MONTH) + 1
+
+        // Day (1-31)
+        val day = calendar.get(java.util.Calendar.DAY_OF_MONTH)
+
+        // Convert elapsed seconds to H:M:S
+        val hours = (elapsedSeconds / 3600) % 24
+        val minutes = (elapsedSeconds % 3600) / 60
+        val seconds = elapsedSeconds % 60
+
+        // DayOfWeek: Calendar uses 1=Sunday...7=Saturday
+        // iLens expects: 1=Monday...7=Sunday
+        val calDow = calendar.get(java.util.Calendar.DAY_OF_WEEK)
+        val iLensDow = if (calDow == java.util.Calendar.SUNDAY) 7 else calDow - 1
+
+        return byteArrayOf(
+            (year and 0xFF).toByte(),           // Year low byte
+            ((year shr 8) and 0xFF).toByte(),   // Year high byte
+            month.toByte(),
+            day.toByte(),
+            hours.toByte(),
+            minutes.toByte(),
+            seconds.toByte(),
+            iLensDow.toByte(),
+            0x00,                               // Fraction256
+            0x02                                // Reason: External Reference
+        )
+    }
+
     // ========== Universal Subscriptions Initialization Commands ==========
     // CRITICAL: Must be sent after BLE connection before sending exercise data
     // Reference: iLens-BLE-Connection-Best-Practices.md

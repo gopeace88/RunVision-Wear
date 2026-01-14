@@ -32,36 +32,41 @@ fun HomeScreen(
         ) {
             Text(
                 text = "RunVision",
-                fontSize = 20.sp,
+                fontSize = 28.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color.White
             )
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(20.dp))
 
             Button(
                 onClick = onStartClick,
+                modifier = Modifier.size(width = 100.dp, height = 50.dp),
                 colors = ButtonDefaults.primaryButtonColors()
             ) {
-                Text("START")
+                Text(
+                    text = "START",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold
+                )
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(20.dp))
 
-            val statusText = when (connectionState) {
-                RLensConnection.ConnectionState.CONNECTED -> "● rLens"
-                RLensConnection.ConnectionState.CONNECTING -> "○ Connecting..."
-                RLensConnection.ConnectionState.RECONNECTING -> "○ Reconnecting..."
-                RLensConnection.ConnectionState.DISCONNECTED -> "○ rLens"
-            }
-            val statusColor = when (connectionState) {
-                RLensConnection.ConnectionState.CONNECTED -> Color(0xFF4CAF50)
-                else -> Color.Gray
+            // Status text based on connection state
+            val (statusText, statusColor) = when (connectionState) {
+                RLensConnection.ConnectionState.CONNECTED -> "Connected" to Color(0xFF4CAF50)
+                RLensConnection.ConnectionState.CONNECTING -> "Connecting.." to Color(0xFFFF9800)
+                RLensConnection.ConnectionState.RECONNECTING -> "Reconnecting.." to Color(0xFFFF9800)
+                RLensConnection.ConnectionState.SCANNING -> "Scanning.." to Color(0xFF2196F3)
+                RLensConnection.ConnectionState.NOT_FOUND -> "Not Found" to Color(0xFFF44336)
+                RLensConnection.ConnectionState.DISCONNECTED -> "READY" to Color.Gray
             }
 
             Text(
                 text = statusText,
-                fontSize = 12.sp,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Medium,
                 color = statusColor,
                 textAlign = TextAlign.Center
             )

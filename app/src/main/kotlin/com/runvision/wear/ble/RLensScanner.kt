@@ -28,9 +28,12 @@ class RLensScanner(
 
     private val bluetoothAdapter: BluetoothAdapter? = BluetoothAdapter.getDefaultAdapter()
     private var isScanning = false
+    private var deviceFound = false  // Prevent multiple connections
 
     private val scanCallback = object : ScanCallback() {
         override fun onScanResult(callbackType: Int, result: ScanResult) {
+            if (deviceFound) return  // Already found, ignore subsequent results
+
             val device = result.device
             val deviceName = device.name?.lowercase() ?: ""
 
@@ -42,6 +45,7 @@ class RLensScanner(
             // Filter: "ilens" or "rlens" (case-insensitive, backward compatible)
             if (deviceName.contains("ilens") || deviceName.contains("rlens") ||
                 scanRecord.contains("ilens") || scanRecord.contains("rlens")) {
+                deviceFound = true
                 Log.d(TAG, "Found rLens device: ${device.name} (${device.address})")
                 stopScan()
                 onDeviceFound(device)
@@ -70,6 +74,7 @@ class RLensScanner(
             .build()
 
         Log.d(TAG, "Starting BLE scan...")
+        deviceFound = false  // Reset for new scan
         isScanning = true
         scanner.startScan(null, settings, scanCallback)
     }

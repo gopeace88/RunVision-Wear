@@ -60,6 +60,14 @@ class DistanceCalculator {
 
     fun getTotalDistance(): Float = totalDistanceMeters
 
+    /**
+     * Set distance directly from Health Services
+     * Used when Health Services provides distance data
+     */
+    fun setDistance(meters: Double) {
+        totalDistanceMeters = meters.toFloat()
+    }
+
     fun reset() {
         lastLat = null
         lastLon = null
