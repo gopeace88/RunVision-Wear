@@ -2,6 +2,7 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+    id("com.google.devtools.ksp")
 }
 
 android {
@@ -57,6 +58,16 @@ dependencies {
 
     // Health Services (real-time sensor data)
     implementation("androidx.health:health-services-client:1.0.0-rc01")
+
+    // Wear Tiles (launcher tile)
+    implementation("androidx.wear.tiles:tiles:1.4.0")
+    implementation("androidx.wear.protolayout:protolayout:1.2.0")
+    implementation("androidx.wear.protolayout:protolayout-material:1.2.0")
+
+    // Room Database (local storage)
+    implementation("androidx.room:room-runtime:2.6.1")
+    implementation("androidx.room:room-ktx:2.6.1")
+    ksp("androidx.room:room-compiler:2.6.1")
 
     // Lifecycle
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.6.2")

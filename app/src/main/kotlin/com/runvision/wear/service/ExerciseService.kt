@@ -19,9 +19,14 @@ import com.runvision.wear.R
 import com.runvision.wear.ble.RLensConnection
 import com.runvision.wear.ble.RLensScanner
 import com.runvision.wear.data.RunningMetrics
+import com.runvision.wear.data.db.WorkoutDatabase
+import com.runvision.wear.data.db.WorkoutDao
+import com.runvision.wear.data.db.WorkoutSession
+import com.runvision.wear.data.db.WorkoutSample
 import com.runvision.wear.engine.RunningEngine
 import com.runvision.wear.health.ExerciseManager
 import kotlinx.coroutines.*
+import java.util.UUID
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
@@ -48,6 +53,11 @@ class ExerciseService : Service() {
 
     private lateinit var runningEngine: RunningEngine
     private lateinit var exerciseManager: ExerciseManager
+
+    // Room Database
+    private lateinit var workoutDatabase: WorkoutDatabase
+    private lateinit var workoutDao: WorkoutDao
+    private var currentSessionId: String? = null
 
     // BLE 컴포넌트 - Service에서 직접 관리 (Activity lifecycle과 분리)
     private var rLensScanner: RLensScanner? = null
@@ -85,6 +95,11 @@ class ExerciseService : Service() {
         Log.d(TAG, "ExerciseService created")
 
         runningEngine = RunningEngine()
+
+        // Initialize Room Database
+        workoutDatabase = WorkoutDatabase.getInstance(this)
+        workoutDao = workoutDatabase.workoutDao()
+
         exerciseManager = ExerciseManager(this).apply {
             onHeartRateUpdate = { hr ->
                 Log.d(TAG, "HR update: $hr")
@@ -225,6 +240,18 @@ class ExerciseService : Service() {
         runningEngine.start()
         _isRunning.value = true
 
+        // Create new workout session in DB
+        currentSessionId = UUID.randomUUID().toString()
+        serviceScope.launch(Dispatchers.IO) {
+            workoutDao.insertSession(
+                WorkoutSession(
+                    sessionId = currentSessionId!!,
+                    startTime = System.currentTimeMillis()
+                )
+            )
+            Log.d(TAG, "Created workout session: $currentSessionId")
+        }
+
         // Start Health Services
         serviceScope.launch {
             exerciseManager.startExercise()
@@ -258,10 +285,47 @@ class ExerciseService : Service() {
      */
     fun stopExercise() {
         Log.d(TAG, "Stopping exercise from service")
+        val finalMetrics = runningEngine.getCurrentMetrics()
         runningEngine.stop()
         _isRunning.value = false
         _isPaused.value = false
         timerJob?.cancel()
+
+        // Update session with summary stats and cleanup
+        currentSessionId?.let { sessionId ->
+            serviceScope.launch(Dispatchers.IO) {
+                try {
+                    // Calculate averages from samples
+                    val avgHr = workoutDao.getAvgHeartRate(sessionId)?.toInt() ?: 0
+                    val avgPace = workoutDao.getAvgPace(sessionId)?.toInt() ?: 0
+                    val avgCad = workoutDao.getAvgCadence(sessionId)?.toInt() ?: 0
+
+                    // Get existing session and update it
+                    workoutDao.getSession(sessionId)?.let { session ->
+                        val updatedSession = session.copy(
+                            endTime = System.currentTimeMillis(),
+                            totalDistanceMeters = finalMetrics.distanceMeters,
+                            totalDurationSeconds = finalMetrics.elapsedSeconds,
+                            avgHeartRate = avgHr,
+                            avgPaceSecondsPerKm = avgPace,
+                            avgCadence = avgCad
+                        )
+                        workoutDao.updateSession(updatedSession)
+                        Log.d(TAG, "Updated session: $sessionId, duration=${finalMetrics.elapsedSeconds}s, distance=${finalMetrics.distanceMeters}m")
+                    }
+
+                    // Cleanup: keep only 50 most recent sessions
+                    workoutDao.keepRecentSessions(50)
+                    val sessionCount = workoutDao.getSessionCount()
+                    val sampleCount = workoutDao.getTotalSampleCount()
+                    Log.d(TAG, "DB stats: $sessionCount sessions, $sampleCount samples")
+
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to update session", e)
+                }
+            }
+        }
+        currentSessionId = null
 
         serviceScope.launch {
             exerciseManager.endExercise()
@@ -310,6 +374,24 @@ class ExerciseService : Service() {
                         Log.w(TAG, "rLens NOT connected, skipping send")
                     }
                 } ?: Log.w(TAG, "rLensConnection is NULL")
+
+                // Save sample to DB (fire-and-forget, IO thread)
+                currentSessionId?.let { sessionId ->
+                    launch(Dispatchers.IO) {
+                        workoutDao.insertSample(
+                            WorkoutSample(
+                                sessionId = sessionId,
+                                timestamp = System.currentTimeMillis(),
+                                heartRate = currentMetrics.heartRate,
+                                paceSecondsPerKm = currentMetrics.paceSecondsPerKm,
+                                cadence = currentMetrics.cadence,
+                                distanceMeters = currentMetrics.distanceMeters,
+                                latitude = currentMetrics.latitude,
+                                longitude = currentMetrics.longitude
+                            )
+                        )
+                    }
+                }
 
                 // Update notification with current metrics
                 updateNotification(currentMetrics)

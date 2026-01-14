@@ -26,6 +26,10 @@ class RunningEngine {
     private var lastLat: Double = 0.0
     private var lastLon: Double = 0.0
 
+    // Pace smoothing - keep last valid pace to avoid flickering
+    private var lastValidPace: Int = 0
+    private var lastValidPaceTime: Long = 0
+
     // Cadence-based distance estimation (fallback)
     private var totalSteps: Long = 0
     private var lastCadenceTime: Long = 0
@@ -47,6 +51,9 @@ class RunningEngine {
 
         // Minimum cadence to consider "running" (not walking)
         private const val MIN_RUNNING_CADENCE = 120  // steps per minute
+
+        // Pace smoothing: keep valid pace for this duration before showing 0
+        private const val PACE_VALID_DURATION_MS = 3000L  // 3 seconds
     }
 
     private var isRunning: Boolean = false
@@ -173,9 +180,16 @@ class RunningEngine {
             val deltaDistance = meters - lastHealthDistance  // meters
             val deltaTime = (now - lastHealthDistanceTime) / 1000.0  // seconds
 
-            if (deltaTime > 0 && deltaDistance > 0) {
+            // Minimum 100ms to avoid division issues
+            if (deltaTime > 0.1 && deltaDistance > 0) {
                 val speedMs = (deltaDistance / deltaTime).toFloat()  // m/s
                 paceSecondsPerKm = PaceCalculator.calculatePaceSeconds(speedMs)
+
+                // Save as last valid pace if within valid range
+                if (paceSecondsPerKm in MIN_PACE_SECONDS..MAX_PACE_SECONDS) {
+                    lastValidPace = paceSecondsPerKm
+                    lastValidPaceTime = now
+                }
             }
         }
 
@@ -186,32 +200,28 @@ class RunningEngine {
     /**
      * Get current aggregated running metrics
      *
-     * Pace validation:
-     * - If cadence indicates running (>=120 spm) but pace is unrealistic (>10:00/km), set pace to 0
-     * - If pace is faster than elite marathon (<3:00/km), set pace to 0
-     * - This ensures rLens receives 0 when pace data is unreliable
+     * Pace smoothing strategy:
+     * - Use lastValidPace if it was updated within PACE_VALID_DURATION_MS (3 seconds)
+     * - Show 0 only if no valid pace for 3+ seconds (truly stopped)
+     * - This prevents flickering when Health Services sends inconsistent distance deltas
      *
      * @return RunningMetrics with all current values
      */
     fun getCurrentMetrics(): RunningMetrics {
-        // Validate pace: must be within reasonable running range
-        val validatedPace = if (paceSecondsPerKm in MIN_PACE_SECONDS..MAX_PACE_SECONDS) {
-            paceSecondsPerKm
-        } else if (cadence >= MIN_RUNNING_CADENCE && paceSecondsPerKm > MAX_PACE_SECONDS) {
-            // Running cadence but walking pace = invalid data
-            0
-        } else if (paceSecondsPerKm > 0 && paceSecondsPerKm < MIN_PACE_SECONDS) {
-            // Faster than elite marathon = invalid data
-            0
+        val now = System.currentTimeMillis()
+
+        // Use last valid pace if within valid duration, otherwise 0
+        val displayPace = if (lastValidPace > 0 &&
+                             (now - lastValidPaceTime) < PACE_VALID_DURATION_MS) {
+            lastValidPace
         } else {
-            // Either 0 or within valid range for walking
-            if (paceSecondsPerKm > MAX_PACE_SECONDS) 0 else paceSecondsPerKm
+            0
         }
 
         return RunningMetrics(
             elapsedSeconds = elapsedSeconds,
             distanceMeters = distanceCalculator.getTotalDistance(),
-            paceSecondsPerKm = validatedPace,
+            paceSecondsPerKm = displayPace,
             heartRate = heartRate,
             cadence = cadence,
             latitude = lastLat,
@@ -236,6 +246,9 @@ class RunningEngine {
         lastHealthDistanceTime = 0
         hasHealthServicesDistance = false
         isRunning = false
+        // Pace smoothing fields
+        lastValidPace = 0
+        lastValidPaceTime = 0
         distanceCalculator.reset()
         speedCalculator.reset()
     }
