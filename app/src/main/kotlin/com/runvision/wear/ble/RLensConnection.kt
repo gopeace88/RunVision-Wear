@@ -39,7 +39,6 @@ class RLensConnection(
     private var gatt: BluetoothGatt? = null
     // @Volatile 필수: GATT callback은 Binder thread에서 실행되고, isConnected()는 Main thread에서 호출됨
     @Volatile private var exerciseCharacteristic: BluetoothGattCharacteristic? = null
-    @Volatile private var currentTimeCharacteristic: BluetoothGattCharacteristic? = null
     private var universalSubsCharacteristic: BluetoothGattCharacteristic? = null
     private var lastDevice: BluetoothDevice? = null
     private var initializationStep = 0  // Track Universal Subscriptions init progress
@@ -50,9 +49,6 @@ class RLensConnection(
     private var isWriting = false
     private var lastWriteTime = 0L
     private val WRITE_TIMEOUT_MS = 2000L  // Reset isWriting if no callback in 2 seconds
-
-    // ★ Current Time tracking (Garmin 방식: 별도 관리)
-    private var isCurrentTimeWritePending = false
 
     private var reconnectAttempts = 0
     private val handler = Handler(Looper.getMainLooper())
@@ -76,21 +72,12 @@ class RLensConnection(
 
         override fun onServicesDiscovered(gatt: BluetoothGatt, status: Int) {
             if (status == BluetoothGatt.GATT_SUCCESS) {
-                // Get Exercise Data characteristic
+                // Get Exercise Data characteristic (v1.0.2: 5개 메트릭만 전송)
                 val exerciseService = gatt.getService(RLensProtocol.EXERCISE_SERVICE_UUID)
                 exerciseCharacteristic = exerciseService?.getCharacteristic(RLensProtocol.EXERCISE_DATA_UUID)
 
-                // Get Current Time characteristic (for elapsed time)
-                val configService = gatt.getService(RLensProtocol.CONFIG_SERVICE_UUID)
-                currentTimeCharacteristic = configService?.getCharacteristic(RLensProtocol.CURRENT_TIME_UUID)
-
                 if (exerciseCharacteristic != null) {
                     Log.d(TAG, "Exercise characteristic found")
-                    if (currentTimeCharacteristic != null) {
-                        Log.d(TAG, "Current Time characteristic found")
-                    } else {
-                        Log.w(TAG, "Current Time characteristic not found (elapsed time won't sync)")
-                    }
 
                     // Request HIGH priority connection to prevent OS from throttling BLE during screen off
                     val priorityResult = gatt.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_HIGH)
@@ -111,29 +98,15 @@ class RLensConnection(
             status: Int
         ) {
             val elapsed = System.currentTimeMillis() - lastWriteTime
-            val isCurrentTime = characteristic.uuid == RLensProtocol.CURRENT_TIME_UUID
+            Log.d(TAG, "onCharacteristicWrite: status=$status, elapsed=${elapsed}ms, queueSize=${writeQueue.size}")
 
-            Log.d(TAG, "onCharacteristicWrite: isCurrentTime=$isCurrentTime, status=$status, elapsed=${elapsed}ms, queueSize=${writeQueue.size}")
-
-            if (isCurrentTime) {
-                // ★ Current Time callback: 이제 queue 처리 시작
-                isCurrentTimeWritePending = false
-                if (status == BluetoothGatt.GATT_SUCCESS) {
-                    Log.d(TAG, "CurrentTime write completed, starting queue")
-                } else {
-                    Log.w(TAG, "CurrentTime write failed: $status (continuing with queue)")
-                }
-                // 성공/실패 상관없이 queue 처리 시작 (Garmin 방식)
+            // Exercise metrics callback: 다음 항목 처리
+            isWriting = false
+            if (status == BluetoothGatt.GATT_SUCCESS) {
                 processWriteQueue()
             } else {
-                // Exercise metrics callback: 다음 항목 처리
-                isWriting = false
-                if (status == BluetoothGatt.GATT_SUCCESS) {
-                    processWriteQueue()
-                } else {
-                    Log.e(TAG, "Write failed: $status")
-                    writeQueue.clear()
-                }
+                Log.e(TAG, "Write failed: $status")
+                writeQueue.clear()
             }
         }
     }
@@ -156,19 +129,14 @@ class RLensConnection(
         gatt?.close()
         gatt = null
         exerciseCharacteristic = null
-        currentTimeCharacteristic = null
         // Reset write state
         isWriting = false
-        isCurrentTimeWritePending = false
         writeQueue.clear()
     }
 
     /**
      * Send running metrics to rLens
-     *
-     * ★ Garmin 구현 방식 참조 (RunVisionIQView.mc:500-530):
-     * - Current Time: queue 밖에서 직접 전송 (fire-and-forget)
-     * - Exercise metrics: queue를 통한 순차 전송
+     * v1.0.2: 5개 메트릭만 전송 (Sport Time, Pace, HR, Cadence, Distance)
      */
     fun sendMetrics(metrics: RunningMetrics) {
         val exerciseChar = exerciseCharacteristic
@@ -179,60 +147,34 @@ class RLensConnection(
 
         // Check for write timeout - reset if callback was not received
         val timeSinceLastWrite = System.currentTimeMillis() - lastWriteTime
-        if ((isWriting || isCurrentTimeWritePending) && timeSinceLastWrite > WRITE_TIMEOUT_MS) {
+        if (isWriting && timeSinceLastWrite > WRITE_TIMEOUT_MS) {
             Log.w(TAG, "Write timeout detected ($timeSinceLastWrite ms), resetting flags")
             isWriting = false
-            isCurrentTimeWritePending = false
             writeQueue.clear()
         }
 
-        if (isWriting || isCurrentTimeWritePending) {
-            Log.d(TAG, "Skip send: busy (isWriting=$isWriting, isCurrentTimePending=$isCurrentTimeWritePending, elapsed=${System.currentTimeMillis() - lastWriteTime}ms)")
+        if (isWriting) {
+            Log.d(TAG, "Skip send: busy (isWriting=$isWriting, elapsed=${System.currentTimeMillis() - lastWriteTime}ms)")
             return
         }
 
         Log.d(TAG, "Sending: HR=${metrics.heartRate}, Pace=${metrics.paceSecondsPerKm}, Cad=${metrics.cadence}, Dist=${metrics.distanceMeters.toInt()}, Time=${metrics.elapsedSeconds}s")
 
-        // ★ Exercise metrics: queue 먼저 준비 (Garmin과 동일한 순서)
+        // ★ v1.0.2: 5개 메트릭만 전송 (Current Time 제거, Sport Time 사용)
         writeQueue.clear()
-        writeQueue.add(WriteEntry(exerciseChar, RLensProtocol.createPacePacket(metrics.paceSecondsPerKm)))
-        writeQueue.add(WriteEntry(exerciseChar, RLensProtocol.createHeartRatePacket(metrics.heartRate)))
-        writeQueue.add(WriteEntry(exerciseChar, RLensProtocol.createCadencePacket(metrics.cadence)))
-        writeQueue.add(WriteEntry(exerciseChar, RLensProtocol.createDistancePacket(metrics.distanceMeters.toInt())))
+        writeQueue.add(WriteEntry(exerciseChar, RLensProtocol.createExerciseTimePacket(metrics.elapsedSeconds)))  // ⭐ Sport Time (0x03)
+        writeQueue.add(WriteEntry(exerciseChar, RLensProtocol.createPacePacket(metrics.paceSecondsPerKm)))        // Pace
+        writeQueue.add(WriteEntry(exerciseChar, RLensProtocol.createHeartRatePacket(metrics.heartRate)))          // Heart Rate
+        writeQueue.add(WriteEntry(exerciseChar, RLensProtocol.createCadencePacket(metrics.cadence)))              // Cadence
+        writeQueue.add(WriteEntry(exerciseChar, RLensProtocol.createDistancePacket(metrics.distanceMeters.toInt()))) // Distance
 
-        // ★ Garmin 방식: Current Time 먼저 전송, 콜백에서 queue 처리 시작
-        val timeChar = currentTimeCharacteristic
-        if (timeChar != null) {
-            try {
-                timeChar.value = RLensProtocol.createCurrentTimePacket(metrics.elapsedSeconds)
-                timeChar.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
-                isCurrentTimeWritePending = true
-                lastWriteTime = System.currentTimeMillis()
-                val result = gatt?.writeCharacteristic(timeChar)
-                Log.d(TAG, "CurrentTime write started: result=$result, time=${metrics.elapsedSeconds}s")
-
-                if (result != true) {
-                    // Current Time 전송 실패 → 바로 queue 처리 시작
-                    Log.w(TAG, "CurrentTime write failed to start, processing queue directly")
-                    isCurrentTimeWritePending = false
-                    processWriteQueue()
-                }
-                // result == true → onCharacteristicWrite 콜백에서 queue 처리 시작
-            } catch (e: Exception) {
-                Log.w(TAG, "CurrentTime write exception: ${e.message}")
-                isCurrentTimeWritePending = false
-                processWriteQueue()
-            }
-        } else {
-            // Current Time characteristic 없음 → 바로 queue 처리
-            Log.d(TAG, "No CurrentTime characteristic, processing queue directly")
-            processWriteQueue()
-        }
+        // 바로 queue 처리 시작
+        processWriteQueue()
     }
 
     private fun processWriteQueue() {
-        if (isCurrentTimeWritePending || isWriting || writeQueue.isEmpty()) {
-            Log.d(TAG, "processWriteQueue: isCurrentTimePending=$isCurrentTimeWritePending, isWriting=$isWriting, queueSize=${writeQueue.size}")
+        if (isWriting || writeQueue.isEmpty()) {
+            Log.d(TAG, "processWriteQueue: isWriting=$isWriting, queueSize=${writeQueue.size}")
             return
         }
 
