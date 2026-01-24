@@ -11,6 +11,10 @@ import com.runvision.wear.data.RunningMetrics
  * - PaceCalculator (pace from speed)
  * - Sensor data (HR, cadence from Health Services)
  * - Timer (elapsed seconds)
+ * - AdaptivePaceCalculator (GPS/cadence mode switching)
+ * - StrideLengthLearner (GPS-based stride learning)
+ * - StopDetector (cadence + distance-based stop detection)
+ * - PaceSmoother (5-sample moving average with outlier rejection)
  *
  * Produces RunningMetrics for display and rLens transmission.
  */
@@ -18,6 +22,16 @@ class RunningEngine {
 
     private val distanceCalculator = DistanceCalculator()
     private val speedCalculator = SpeedCalculator()
+
+    // Adaptive pace components
+    private val strideLengthLearner = StrideLengthLearner()
+    private val paceSmoother = PaceSmoother()
+    private val stopDetector = StopDetector()
+    private val adaptivePaceCalculator = AdaptivePaceCalculator(
+        strideLengthLearner,
+        paceSmoother,
+        stopDetector
+    )
 
     private var elapsedSeconds: Int = 0
     private var heartRate: Int = 0
@@ -39,6 +53,9 @@ class RunningEngine {
     private var lastHealthDistance: Double = 0.0
     private var lastHealthDistanceTime: Long = 0
     private var hasHealthServicesDistance: Boolean = false
+
+    // Step tracking for stride learning
+    private var lastStepCount: Long = 0
 
     companion object {
         // Average stride length in meters (running ~0.8m, walking ~0.7m)
@@ -116,6 +133,13 @@ class RunningEngine {
             distanceCalculator.addPoint(lat, lon)
             val speedMs = speedCalculator.calculateSpeed(lat, lon, timestamp)
             paceSecondsPerKm = PaceCalculator.calculatePaceSeconds(speedMs)
+
+            // Update valid pace tracking if within reasonable range
+            val now = System.currentTimeMillis()
+            if (paceSecondsPerKm in MIN_PACE_SECONDS..MAX_PACE_SECONDS) {
+                lastValidPace = paceSecondsPerKm
+                lastValidPaceTime = now
+            }
         }
     }
 
@@ -131,11 +155,15 @@ class RunningEngine {
     /**
      * Update cadence from sensor
      * Also calculates steps for distance estimation when GPS is unavailable
+     * Uses StopDetector and AdaptivePaceCalculator for pace calculation
      *
      * @param spm Steps per minute
      */
     fun updateCadence(spm: Int) {
         cadence = spm
+
+        // Update stop detector with cadence
+        stopDetector.updateCadence(spm)
 
         // Estimate steps since last update
         val now = System.currentTimeMillis()
@@ -144,17 +172,18 @@ class RunningEngine {
             val stepsInPeriod = (spm * deltaSeconds / 60.0).toLong()
             totalSteps += stepsInPeriod
 
-            // If no GPS distance, calculate from cadence
-            if (!hasGpsDistance) {
-                val estimatedDistance = totalSteps * STRIDE_LENGTH_METERS
-                distanceCalculator.setDistance(estimatedDistance)
+            // If no GPS distance, calculate from cadence using adaptive pace calculator
+            if (!hasGpsDistance && !hasHealthServicesDistance) {
+                val estimatedDistance = totalSteps * strideLengthLearner.getStrideLength(spm)
+                distanceCalculator.setDistance(estimatedDistance.toDouble())
 
-                // Calculate pace from cadence (seconds per km)
-                // speed (m/s) = cadence (steps/min) * stride_length (m) / 60
-                // pace (s/km) = 1000 / speed
-                if (spm > 0) {
-                    val speedMs = spm * STRIDE_LENGTH_METERS / 60.0
-                    paceSecondsPerKm = if (speedMs > 0) (1000.0 / speedMs).toInt() else 0
+                // Calculate pace using AdaptivePaceCalculator (cadence mode)
+                paceSecondsPerKm = adaptivePaceCalculator.updateWithCadence(spm)
+
+                // Update valid pace tracking
+                if (paceSecondsPerKm in MIN_PACE_SECONDS..MAX_PACE_SECONDS) {
+                    lastValidPace = paceSecondsPerKm
+                    lastValidPaceTime = now
                 }
             }
         }
@@ -164,7 +193,7 @@ class RunningEngine {
     /**
      * Update distance from Health Services
      * This is the most accurate distance (sensor-fused: GPS + accelerometer + step calibration)
-     * Also calculates pace from distance delta
+     * Also calculates pace from distance delta using AdaptivePaceCalculator
      *
      * @param meters Distance in meters
      */
@@ -174,7 +203,7 @@ class RunningEngine {
         hasHealthServicesDistance = true
         distanceCalculator.setDistance(meters)
 
-        // Calculate pace from Health Services distance delta
+        // Calculate pace from Health Services distance delta using AdaptivePaceCalculator
         val now = System.currentTimeMillis()
         if (lastHealthDistanceTime > 0 && meters > lastHealthDistance) {
             val deltaDistance = meters - lastHealthDistance  // meters
@@ -182,19 +211,56 @@ class RunningEngine {
 
             // Minimum 100ms to avoid division issues
             if (deltaTime > 0.1 && deltaDistance > 0) {
-                val speedMs = (deltaDistance / deltaTime).toFloat()  // m/s
-                paceSecondsPerKm = PaceCalculator.calculatePaceSeconds(speedMs)
+                // Use AdaptivePaceCalculator for smoothed pace
+                paceSecondsPerKm = adaptivePaceCalculator.updateWithGpsDistance(deltaDistance, deltaTime)
 
                 // Save as last valid pace if within valid range
                 if (paceSecondsPerKm in MIN_PACE_SECONDS..MAX_PACE_SECONDS) {
                     lastValidPace = paceSecondsPerKm
                     lastValidPaceTime = now
                 }
+
+                // Update stride learner with GPS data and step count
+                val stepsDelta = totalSteps - lastStepCount
+                if (stepsDelta > 0) {
+                    strideLengthLearner.updateWithGpsData(deltaDistance, stepsDelta)
+                    lastStepCount = totalSteps
+                }
             }
         }
 
         lastHealthDistance = meters
         lastHealthDistanceTime = now
+    }
+
+    /**
+     * Update distance from Health Services with cadence and heart rate
+     * This is the extended signature for full metric updates
+     * Uses AdaptivePaceCalculator and StrideLengthLearner
+     *
+     * @param distanceMeters Distance in meters
+     * @param cadenceSpm Steps per minute
+     * @param heartRateBpm Heart rate in beats per minute
+     */
+    fun updateDistance(distanceMeters: Double, cadenceSpm: Int, heartRateBpm: Int) {
+        // Update cadence and heart rate first (for stride learning)
+        cadence = cadenceSpm
+        heartRate = heartRateBpm
+
+        // Update stop detector with cadence
+        stopDetector.updateCadence(cadenceSpm)
+
+        // Estimate steps since last update for stride learning
+        val now = System.currentTimeMillis()
+        if (lastCadenceTime > 0 && isRunning && cadenceSpm > 0) {
+            val deltaSeconds = (now - lastCadenceTime) / 1000.0
+            val stepsInPeriod = (cadenceSpm * deltaSeconds / 60.0).toLong()
+            totalSteps += stepsInPeriod
+        }
+        lastCadenceTime = now
+
+        // Now update distance (which uses the updated step count for stride learning)
+        updateDistance(distanceMeters)
     }
 
     /**
@@ -249,8 +315,15 @@ class RunningEngine {
         // Pace smoothing fields
         lastValidPace = 0
         lastValidPaceTime = 0
+        lastStepCount = 0
+        // Reset calculators
         distanceCalculator.reset()
         speedCalculator.reset()
+        // Reset adaptive pace components
+        strideLengthLearner.reset()
+        paceSmoother.reset()
+        stopDetector.reset()
+        adaptivePaceCalculator.reset()
     }
 
     /**
