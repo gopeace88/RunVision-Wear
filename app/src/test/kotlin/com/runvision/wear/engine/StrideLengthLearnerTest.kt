@@ -1,6 +1,11 @@
 // app/src/test/kotlin/com/runvision/wear/engine/StrideLengthLearnerTest.kt
 package com.runvision.wear.engine
 
+import android.content.Context
+import android.content.SharedPreferences
+import io.mockk.every
+import io.mockk.mockk
+import io.mockk.verify
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
@@ -11,6 +16,7 @@ class StrideLengthLearnerTest {
 
     @Before
     fun setup() {
+        // Use null context for basic tests (no persistence)
         learner = StrideLengthLearner()
     }
 
@@ -72,5 +78,102 @@ class StrideLengthLearnerTest {
 
         learner.reset()
         assertFalse(learner.hasLearnedStride())
+    }
+
+    // ========== Persistence Tests ==========
+
+    @Test
+    fun `saveToStorage saves stride to SharedPreferences`() {
+        val mockEditor = mockk<SharedPreferences.Editor> {
+            every { putFloat(any(), any()) } returns this
+            every { apply() } returns Unit
+        }
+        val mockPrefs = mockk<SharedPreferences> {
+            every { edit() } returns mockEditor
+            every { contains(any()) } returns false
+        }
+        val mockContext = mockk<Context> {
+            every { getSharedPreferences(any(), any()) } returns mockPrefs
+        }
+
+        val learnerWithContext = StrideLengthLearner(mockContext)
+
+        // Learn stride (triggers save)
+        learnerWithContext.updateWithGpsData(600.0, 750)
+
+        verify { mockEditor.putFloat("learned_stride_length", 0.80f) }
+        verify { mockEditor.apply() }
+    }
+
+    @Test
+    fun `loadFromStorage loads stride from SharedPreferences`() {
+        val mockPrefs = mockk<SharedPreferences> {
+            every { contains("learned_stride_length") } returns true
+            every { getFloat("learned_stride_length", any()) } returns 0.85f
+        }
+        val mockContext = mockk<Context> {
+            every { getSharedPreferences(any(), any()) } returns mockPrefs
+        }
+
+        val learnerWithContext = StrideLengthLearner(mockContext)
+
+        // Should have loaded stride from storage
+        assertTrue(learnerWithContext.hasLearnedStride())
+        assertEquals(0.85f, learnerWithContext.getStrideLength(180), 0.01f)
+    }
+
+    @Test
+    fun `loadFromStorage does nothing when no saved data`() {
+        val mockPrefs = mockk<SharedPreferences> {
+            every { contains("learned_stride_length") } returns false
+        }
+        val mockContext = mockk<Context> {
+            every { getSharedPreferences(any(), any()) } returns mockPrefs
+        }
+
+        val learnerWithContext = StrideLengthLearner(mockContext)
+
+        // Should not have learned stride
+        assertFalse(learnerWithContext.hasLearnedStride())
+        // Should use default calculation
+        assertEquals(0.85f, learnerWithContext.getStrideLength(180), 0.01f)
+    }
+
+    @Test
+    fun `clearStorage removes stride from SharedPreferences`() {
+        val mockEditor = mockk<SharedPreferences.Editor> {
+            every { remove(any()) } returns this
+            every { apply() } returns Unit
+        }
+        val mockPrefs = mockk<SharedPreferences> {
+            every { edit() } returns mockEditor
+            every { contains(any()) } returns false
+        }
+        val mockContext = mockk<Context> {
+            every { getSharedPreferences(any(), any()) } returns mockPrefs
+        }
+
+        val learnerWithContext = StrideLengthLearner(mockContext)
+        learnerWithContext.clearStorage()
+
+        verify { mockEditor.remove("learned_stride_length") }
+        verify { mockEditor.apply() }
+    }
+
+    @Test
+    fun `null context disables persistence gracefully`() {
+        val learnerNoContext = StrideLengthLearner(null)
+
+        // Should work without errors
+        learnerNoContext.updateWithGpsData(600.0, 750)
+        assertTrue(learnerNoContext.hasLearnedStride())
+
+        // Save/load should be no-ops
+        learnerNoContext.saveToStorage()
+        learnerNoContext.loadFromStorage()
+        learnerNoContext.clearStorage()
+
+        // Still has in-memory data
+        assertTrue(learnerNoContext.hasLearnedStride())
     }
 }

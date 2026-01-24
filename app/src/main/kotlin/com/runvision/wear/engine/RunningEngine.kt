@@ -1,5 +1,6 @@
 package com.runvision.wear.engine
 
+import android.content.Context
 import com.runvision.wear.data.RunningMetrics
 
 /**
@@ -12,19 +13,22 @@ import com.runvision.wear.data.RunningMetrics
  * - Sensor data (HR, cadence from Health Services)
  * - Timer (elapsed seconds)
  * - AdaptivePaceCalculator (GPS/cadence mode switching)
- * - StrideLengthLearner (GPS-based stride learning)
+ * - StrideLengthLearner (GPS-based stride learning with persistence)
  * - StopDetector (cadence + distance-based stop detection)
  * - PaceSmoother (5-sample moving average with outlier rejection)
  *
  * Produces RunningMetrics for display and rLens transmission.
+ *
+ * @param context Optional Android context for persistence (StrideLengthLearner).
+ *                Pass null for unit tests without persistence.
  */
-class RunningEngine {
+class RunningEngine(context: Context? = null) {
 
     private val distanceCalculator = DistanceCalculator()
     private val speedCalculator = SpeedCalculator()
 
     // Adaptive pace components
-    private val strideLengthLearner = StrideLengthLearner()
+    private val strideLengthLearner = StrideLengthLearner(context)
     private val paceSmoother = PaceSmoother()
     private val stopDetector = StopDetector()
     private val adaptivePaceCalculator = AdaptivePaceCalculator(

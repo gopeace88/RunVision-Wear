@@ -94,7 +94,7 @@ class ExerciseService : Service() {
         super.onCreate()
         Log.d(TAG, "ExerciseService created")
 
-        runningEngine = RunningEngine()
+        runningEngine = RunningEngine(this)
 
         // Initialize Room Database
         workoutDatabase = WorkoutDatabase.getInstance(this)
