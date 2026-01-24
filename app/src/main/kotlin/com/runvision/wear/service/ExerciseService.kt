@@ -220,6 +220,7 @@ class ExerciseService : Service() {
      * @deprecated BLE connection is now managed internally by Service
      * This method is kept for backwards compatibility but does nothing
      */
+    @Suppress("UNUSED_PARAMETER")
     @Deprecated("BLE is now managed by Service. Use startScanning() instead.")
     fun setRLensConnection(connection: RLensConnection) {
         Log.d(TAG, "setRLensConnection() called but ignored - BLE is managed by Service")

@@ -5,6 +5,11 @@ build/
 
 # Local configuration
 local.properties
+keystore.properties
+
+# Signing
+*.jks
+*.keystore
 
 # Android Studio
 *.iml
