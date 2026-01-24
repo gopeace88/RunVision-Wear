@@ -1,5 +1,6 @@
 package com.runvision.wear.health
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.util.Log
 import androidx.health.services.client.ExerciseClient
@@ -146,6 +147,7 @@ class ExerciseManager(context: Context) {
             val currentInfo = exerciseClient.getCurrentExerciseInfoAsync().await()
             Log.d(TAG, "Current exercise state: ${currentInfo.exerciseTrackedStatus}")
 
+            @SuppressLint("RestrictedApi")
             if (currentInfo.exerciseTrackedStatus == ExerciseTrackedStatus.OWNED_EXERCISE_IN_PROGRESS ||
                 currentInfo.exerciseTrackedStatus == ExerciseTrackedStatus.OTHER_APP_IN_PROGRESS) {
                 Log.d(TAG, "Ending existing exercise first...")
