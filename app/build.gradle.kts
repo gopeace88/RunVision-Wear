@@ -22,8 +22,8 @@ android {
         applicationId = "com.runvision.wear"
         minSdk = 30
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 4
+        versionName = "1.0.4"
     }
 
     signingConfigs {
@@ -76,12 +76,12 @@ dependencies {
     implementation("androidx.activity:activity-compose:1.8.1")
 
     // Health Services (real-time sensor data)
-    implementation("androidx.health:health-services-client:1.0.0-rc01")
+    implementation("androidx.health:health-services-client:1.1.0-alpha04")
 
     // Wear Tiles (launcher tile)
-    implementation("androidx.wear.tiles:tiles:1.4.0")
-    implementation("androidx.wear.protolayout:protolayout:1.2.0")
-    implementation("androidx.wear.protolayout:protolayout-material:1.2.0")
+    implementation("androidx.wear.tiles:tiles:1.4.1")
+    implementation("androidx.wear.protolayout:protolayout:1.2.1")
+    implementation("androidx.wear.protolayout:protolayout-material:1.2.1")
 
     // Room Database (local storage)
     implementation("androidx.room:room-runtime:2.6.1")
