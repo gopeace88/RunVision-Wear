@@ -1,0 +1,1182 @@
+runvision-wear 를 비공개테스트하고 프로모션 출시를 신청했는데, 반려되었다. 아마 테스터가 12명이지만 설치한 사람이 2명밖에 없어서 그랬나보다. 어떻하지?
+
+---
+
+갤럭시워치에서 다운받아야하죠?
+
+---
+
+일반앱은 4명정도 다운받아도 통과했는데, 이것도 3명정도만 있어도 될까?
+
+---
+
+일단 runvision-ware 를 새버전으로 릴리즈해야되죠? 1.0.4(4) 였나? 1.0.5(5) 로 빌드해주세요.
+
+---
+
+캘럭시워치에서 구글계정을 바꿔가면서 설치를 하면 설치기기 갯수가 올라가기는한다.
+
+---
+
+this version of the library has a known issue where a securityexception might be thrown on wear5(api34) devices when your app targetes api level 35 or higher. please update to 1.5.0-beta01 or later before targeting api level 35.
+
+---
+
+이전에 빌드된것을 그냥 1.0.5 로 올렸는데 괜찮은거에요? 이전에 1.0.4 에서 문제가 있었던거에요?
+
+---
+
+1.0.5 도 반려되었다. 1.0.6 을 만들어서 다시 신청해보겠다. 만들어달라.
+
+---
+
+구글 스토어에 runvision-wear 를 등록하기 어렵구나. runvision app 은 구글에 잘 등록했다. runvision-wear 를 runvision 의 companion app 으로 등록하면 안되나?
+
+---
+
+tester community service 업체에서 자동으로 companion abb 를 만들어준다. '/mnt/d/OneDrive/000.바탕화면/com.runvision.wear-release.aab'
+
+---
+
+이 업체가 만들어준 것이다.
+
+---
+
+이것을 이전의 1.0.6 이후버전으로 등록해야하나? 아니면 신규 패키지로 등록해야하나? 나는 companion 등록은 안해봤다.
+
+---
+
+새앱으로 등록하면 기존 등록한 패키지, 앱이름을 못쓰게 되잖아요. 기존 등록한 패키지를 삭제하고 다시 해볼까요?
+
+---
+
+버전을 넣어서 생성하는 기능은 없네요. 당신이 이 앱처럼 컴패년앱을 생성할수는 없나요? 그리고, 컴패넌앱은 등록방식이 다르지 않나요? 기존 패키지에 등록해서 사용할수있나요?
+
+---
+
+이 컴패넌 앱을 기존의 테스트 패키지에 등록해서 사용할수있나요?
+
+---
+
+그런데, 기존 패키지는 WearOS 영역이라서 못 올리거나 패키지 영역을 바꿔야하지 않나요? 컴패년 앱 이라고는 없어요.
+
+---
+
+지금 runvision apk 는 구글에 등록이 되어있다. 이것을 활용할 방법은 없나?
+
+---
+
+지금 wear 앱은 kotln 으로 제작되어서 합칠수가 없다.
+
+---
+
+지금 runvision apk 는 production 으로 배포되고 있다. 여기에 그냥 패키지를 버전 업만 해도 된다는 건가? 반려당하지 않나?
+
+---
+
+그럼 폰에서 runvision 으로 검색해서 설치할수있다는건가?
+
+---
+
+[Request interrupted by user]
+
+---
+
+그럼 이렇게 등록하면 워치에서도  runvision 으로 검색해서 설치할수있다는건가?
+
+---
+
+가민워치를 사용하는 사람도 '워치에 설치하겠습니까' 하는 안내메새지를 보겠네?
+
+---
+
+아하... 이편이 제일 확실한거네...
+
+---
+
+일단 기존 내용을 commit 해야할지 살펴봐라.
+
+---
+
+runvision-iq 도 변경 사항이 있습니다.
+
+---
+
+넵.
+
+---
+
+네..
+
+---
+
+Base directory for this skill: /home/jhkim/.claude/plugins/cache/claude-plugins-official/superpowers/5.0.4/skills/writing-plans
+
+# Writing Plans
+
+## Overview
+
+Write comprehensive implementation plans assuming the engineer has zero context for our codebase and questionable taste. Document everything they need to know: which files to touch for each task, code, testing, docs they might need to check, how to test it. Give them the whole plan as bite-sized tasks. DRY. YAGNI. TDD. Frequent commits.
+
+Assume they are a skilled developer, but know almost nothing about our toolset or problem domain. Assume they don't know good test design very well.
+
+**Announce at start:** "I'm using the writing-plans skill to create the implementation plan."
+
+**Context:** This should be run in a dedicated worktree (created by brainstorming skill).
+
+**Save plans to:** `docs/superpowers/plans/YYYY-MM-DD-<feature-name>.md`
+- (User preferences for plan location override this default)
+
+## Scope Check
+
+If the spec covers multiple independent subsystems, it should have been broken into sub-project specs during brainstorming. If it wasn't, suggest breaking this into separate plans — one per subsystem. Each plan should produce working, testable software on its own.
+
+## File Structure
+
+Before defining tasks, map out which files will be created or modified and what each one is responsible for. This is where decomposition decisions get locked in.
+
+- Design units with clear boundaries and well-defined interfaces. Each file should have one clear responsibility.
+- You reason best about code you can hold in context at once, and your edits are more reliable when files are focused. Prefer smaller, focused files over large ones that do too much.
+- Files that change together should live together. Split by responsibility, not by technical layer.
+- In existing codebases, follow established patterns. If the codebase uses large files, don't unilaterally restructure - but if a file you're modifying has grown unwieldy, including a split in the plan is reasonable.
+
+This structure informs the task decomposition. Each task should produce self-contained changes that make sense independently.
+
+## Bite-Sized Task Granularity
+
+**Each step is one action (2-5 minutes):**
+- "Write the failing test" - step
+- "Run it to make sure it fails" - step
+- "Implement the minimal code to make the test pass" - step
+- "Run the tests and make sure they pass" - step
+- "Commit" - step
+
+## Plan Document Header
+
+**Every plan MUST start with this header:**
+
+```markdown
+# [Feature Name] Implementation Plan
+
+> **For agentic workers:** REQUIRED: Use superpowers:subagent-driven-development (if subagents available) or superpowers:executing-plans to implement this plan. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** [One sentence describing what this builds]
+
+**Architecture:** [2-3 sentences about approach]
+
+**Tech Stack:** [Key technologies/libraries]
+
+---
+```
+
+## Task Structure
+
+````markdown
+### Task N: [Component Name]
+
+**Files:**
+- Create: `exact/path/to/file.py`
+- Modify: `exact/path/to/existing.py:123-145`
+- Test: `tests/exact/path/to/test.py`
+
+- [ ] **Step 1: Write the failing test**
+
+```python
+def test_specific_behavior():
+    result = function(input)
+    assert result == expected
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `pytest tests/path/test.py::test_name -v`
+Expected: FAIL with "function not defined"
+
+- [ ] **Step 3: Write minimal implementation**
+
+```python
+def function(input):
+    return expected
+```
+
+- [ ] **Step 4: Run test to verify it passes**
+
+Run: `pytest tests/path/test.py::test_name -v`
+Expected: PASS
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add tests/path/test.py src/path/file.py
+git commit -m "feat: add specific feature"
+```
+````
+
+## Remember
+- Exact file paths always
+- Complete code in plan (not "add validation")
+- Exact commands with expected output
+- Reference relevant skills with @ syntax
+- DRY, YAGNI, TDD, frequent commits
+
+## Plan Review Loop
+
+After writing the complete plan:
+
+1. Dispatch a single plan-document-reviewer subagent (see plan-document-reviewer-prompt.md) with precisely crafted review context — never your session history. This keeps the reviewer focused on the plan, not your thought process.
+   - Provide: path to the plan document, path to spec document
+2. If ❌ Issues Found: fix the issues, re-dispatch reviewer for the whole plan
+3. If ✅ Approved: proceed to execution handoff
+
+**Review loop guidance:**
+- Same agent that wrote the plan fixes it (preserves context)
+- If loop exceeds 3 iterations, surface to human for guidance
+- Reviewers are advisory — explain disagreements if you believe feedback is incorrect
+
+## Execution Handoff
+
+After saving the plan:
+
+**"Plan complete and saved to `docs/superpowers/plans/<filename>.md`. Ready to execute?"**
+
+**Execution path depends on harness capabilities:**
+
+**If harness has subagents (Claude Code, etc.):**
+- **REQUIRED:** Use superpowers:subagent-driven-development
+- Do NOT offer a choice - subagent-driven is the standard approach
+- Fresh subagent per task + two-stage review
+
+**If harness does NOT have subagents:**
+- Execute plan in current session using superpowers:executing-plans
+- Batch execution with checkpoints for review
+
+---
+
+네.
+
+---
+
+Base directory for this skill: /home/jhkim/.claude/plugins/cache/claude-plugins-official/superpowers/5.0.4/skills/executing-plans
+
+# Executing Plans
+
+## Overview
+
+Load plan, review critically, execute all tasks, report when complete.
+
+**Announce at start:** "I'm using the executing-plans skill to implement this plan."
+
+**Note:** Tell your human partner that Superpowers works much better with access to subagents. The quality of its work will be significantly higher if run on a platform with subagent support (such as Claude Code or Codex). If subagents are available, use superpowers:subagent-driven-development instead of this skill.
+
+## The Process
+
+### Step 1: Load and Review Plan
+1. Read plan file
+2. Review critically - identify any questions or concerns about the plan
+3. If concerns: Raise them with your human partner before starting
+4. If no concerns: Create TodoWrite and proceed
+
+### Step 2: Execute Tasks
+
+For each task:
+1. Mark as in_progress
+2. Follow each step exactly (plan has bite-sized steps)
+3. Run verifications as specified
+4. Mark as completed
+
+### Step 3: Complete Development
+
+After all tasks complete and verified:
+- Announce: "I'm using the finishing-a-development-branch skill to complete this work."
+- **REQUIRED SUB-SKILL:** Use superpowers:finishing-a-development-branch
+- Follow that skill to verify tests, present options, execute choice
+
+## When to Stop and Ask for Help
+
+**STOP executing immediately when:**
+- Hit a blocker (missing dependency, test fails, instruction unclear)
+- Plan has critical gaps preventing starting
+- You don't understand an instruction
+- Verification fails repeatedly
+
+**Ask for clarification rather than guessing.**
+
+## When to Revisit Earlier Steps
+
+**Return to Review (Step 1) when:**
+- Partner updates the plan based on your feedback
+- Fundamental approach needs rethinking
+
+**Don't force through blockers** - stop and ask.
+
+## Remember
+- Review plan critically first
+- Follow plan steps exactly
+- Don't skip verifications
+- Reference skills when plan says to
+- Stop when blocked, don't guess
+- Never start implementation on main/master branch without explicit user consent
+
+## Integration
+
+**Required workflow skills:**
+- **superpowers:using-git-worktrees** - REQUIRED: Set up isolated workspace before starting
+- **superpowers:writing-plans** - Creates the plan this skill executes
+- **superpowers:finishing-a-development-branch** - Complete development after all tasks
+
+---
+
+폰도 기존 UI 가 그대로 다 나와야한다.
+
+---
+
+워치앱의 id 를 바꾸는 방법도 있죠.
+
+---
+
+네...그리고, 기존 runvision app 사용자는 0명입니다. 방금 출시했습니다.
+
+---
+
+내가 테스트 안해봐도 될까요?
+
+---
+
+aab 와 apk 파일의 위치는?
+
+---
+
+이전 apk 로 설치하면 "갤럭시워치에 설치하시겠습니까?" 하는 문구가 안뜨잖아요.
+
+---
+
+wifi adb 192.192.192.250:35703 에 설치해다오.
+
+---
+
+[Request interrupted by user for tool use]
+
+---
+
+일단 페어링해라. 192.192.192.250:33607 434785
+
+---
+
+[Request interrupted by user for tool use]
+
+---
+
+바뀌었다. 다시  페어링해라. 192.192.192.250:38439 718896
+
+---
+
+[Request interrupted by user]
+
+---
+
+바뀌었다. 다시  페어링해라. 192.192.192.250:38439 718896
+
+---
+
+[Request interrupted by user]
+
+---
+
+바뀌었다. 다시  페어링해라. 192.192.192.250:38439 718896
+
+---
+
+바뀌었다. 다시  페어링해라. 192.192.192.250:38439 718896
+
+---
+
+'갤럭시 워치에 설치하시겠습니까?' 라는게 안나오는데?
+
+---
+
+내부테스트를 해보라는거구나.
+
+---
+
+그리고, 폰에서 google store 에 접속해서 설치할때 갤럭시워치가 페어링되어있으면 이떄 문구가 나오는거고.
+
+---
+
+만약에 나중에 갤럭시워치 샀다면 어떻게 해야하지?
+
+---
+
+흠..확실하게 검증하라.
+
+---
+
+당신이 agent-browser 를 사용하여 확인해주세요.
+
+---
+
+Base directory for this skill: /home/jhkim/.claude/skills/agent-browser
+
+# Browser Automation with agent-browser
+
+## Core Workflow
+
+Every browser automation follows this pattern:
+
+1. **Navigate**: `agent-browser open <url>`
+2. **Snapshot**: `agent-browser snapshot -i` (get element refs like `@e1`, `@e2`)
+3. **Interact**: Use refs to click, fill, select
+4. **Re-snapshot**: After navigation or DOM changes, get fresh refs
+
+```bash
+agent-browser open https://example.com/form
+agent-browser snapshot -i
+# Output: @e1 [input type="email"], @e2 [input type="password"], @e3 [button] "Submit"
+
+agent-browser fill @e1 "user@example.com"
+agent-browser fill @e2 "password123"
+agent-browser click @e3
+agent-browser wait --load networkidle
+agent-browser snapshot -i  # Check result
+```
+
+## Essential Commands
+
+```bash
+# Navigation
+agent-browser open <url>              # Navigate (aliases: goto, navigate)
+agent-browser close                   # Close browser
+
+# Snapshot
+agent-browser snapshot -i             # Interactive elements with refs (recommended)
+agent-browser snapshot -i -C          # Include cursor-interactive elements (divs with onclick, cursor:pointer)
+agent-browser snapshot -s "#selector" # Scope to CSS selector
+
+# Interaction (use @refs from snapshot)
+agent-browser click @e1               # Click element
+agent-browser fill @e2 "text"         # Clear and type text
+agent-browser type @e2 "text"         # Type without clearing
+agent-browser select @e1 "option"     # Select dropdown option
+agent-browser check @e1               # Check checkbox
+agent-browser press Enter             # Press key
+agent-browser scroll down 500         # Scroll page
+
+# Get information
+agent-browser get text @e1            # Get element text
+agent-browser get url                 # Get current URL
+agent-browser get title               # Get page title
+
+# Wait
+agent-browser wait @e1                # Wait for element
+agent-browser wait --load networkidle # Wait for network idle
+agent-browser wait --url "**/page"    # Wait for URL pattern
+agent-browser wait 2000               # Wait milliseconds
+
+# Capture
+agent-browser screenshot              # Screenshot to temp dir
+agent-browser screenshot --full       # Full page screenshot
+agent-browser pdf output.pdf          # Save as PDF
+```
+
+## Common Patterns
+
+### Form Submission
+
+```bash
+agent-browser open https://example.com/signup
+agent-browser snapshot -i
+agent-browser fill @e1 "Jane Doe"
+agent-browser fill @e2 "jane@example.com"
+agent-browser select @e3 "California"
+agent-browser check @e4
+agent-browser click @e5
+agent-browser wait --load networkidle
+```
+
+### Authentication with State Persistence
+
+```bash
+# Login once and save state
+agent-browser open https://app.example.com/login
+agent-browser snapshot -i
+agent-browser fill @e1 "$USERNAME"
+agent-browser fill @e2 "$PASSWORD"
+agent-browser click @e3
+agent-browser wait --url "**/dashboard"
+agent-browser state save auth.json
+
+# Reuse in future sessions
+agent-browser state load auth.json
+agent-browser open https://app.example.com/dashboard
+```
+
+### Session Persistence
+
+```bash
+# Auto-save/restore cookies and localStorage across browser restarts
+agent-browser --session-name myapp open https://app.example.com/login
+# ... login flow ...
+agent-browser close  # State auto-saved to ~/.agent-browser/sessions/
+
+# Next time, state is auto-loaded
+agent-browser --session-name myapp open https://app.example.com/dashboard
+
+# Encrypt state at rest
+export AGENT_BROWSER_ENCRYPTION_KEY=$(openssl rand -hex 32)
+agent-browser --session-name secure open https://app.example.com
+
+# Manage saved states
+agent-browser state list
+agent-browser state show myapp-default.json
+agent-browser state clear myapp
+agent-browser state clean --older-than 7
+```
+
+### Data Extraction
+
+```bash
+agent-browser open https://example.com/products
+agent-browser snapshot -i
+agent-browser get text @e5           # Get specific element text
+agent-browser get text body > page.txt  # Get all page text
+
+# JSON output for parsing
+agent-browser snapshot -i --json
+agent-browser get text @e1 --json
+```
+
+### Parallel Sessions
+
+```bash
+agent-browser --session site1 open https://site-a.com
+agent-browser --session site2 open https://site-b.com
+
+agent-browser --session site1 snapshot -i
+agent-browser --session site2 snapshot -i
+
+agent-browser session list
+```
+
+### Connect to Existing Chrome
+
+```bash
+# Auto-discover running Chrome with remote debugging enabled
+agent-browser --auto-connect open https://example.com
+agent-browser --auto-connect snapshot
+
+# Or with explicit CDP port
+agent-browser --cdp 9222 snapshot
+```
+
+### Visual Browser (Debugging)
+
+```bash
+agent-browser --headed open https://example.com
+agent-browser highlight @e1          # Highlight element
+agent-browser record start demo.webm # Record session
+```
+
+### Local Files (PDFs, HTML)
+
+```bash
+# Open local files with file:// URLs
+agent-browser --allow-file-access open file:///path/to/document.pdf
+agent-browser --allow-file-access open file:///path/to/page.html
+agent-browser screenshot output.png
+```
+
+### iOS Simulator (Mobile Safari)
+
+```bash
+# List available iOS simulators
+agent-browser device list
+
+# Launch Safari on a specific device
+agent-browser -p ios --device "iPhone 16 Pro" open https://example.com
+
+# Same workflow as desktop - snapshot, interact, re-snapshot
+agent-browser -p ios snapshot -i
+agent-browser -p ios tap @e1          # Tap (alias for click)
+agent-browser -p ios fill @e2 "text"
+agent-browser -p ios swipe up         # Mobile-specific gesture
+
+# Take screenshot
+agent-browser -p ios screenshot mobile.png
+
+# Close session (shuts down simulator)
+agent-browser -p ios close
+```
+
+**Requirements:** macOS with Xcode, Appium (`npm install -g appium && appium driver install xcuitest`)
+
+**Real devices:** Works with physical iOS devices if pre-configured. Use `--device "<UDID>"` where UDID is from `xcrun xctrace list devices`.
+
+## Ref Lifecycle (Important)
+
+Refs (`@e1`, `@e2`, etc.) are invalidated when the page changes. Always re-snapshot after:
+
+- Clicking links or buttons that navigate
+- Form submissions
+- Dynamic content loading (dropdowns, modals)
+
+```bash
+agent-browser click @e5              # Navigates to new page
+agent-browser snapshot -i            # MUST re-snapshot
+agent-browser click @e1              # Use new refs
+```
+
+## Semantic Locators (Alternative to Refs)
+
+When refs are unavailable or unreliable, use semantic locators:
+
+```bash
+agent-browser find text "Sign In" click
+agent-browser find label "Email" fill "user@test.com"
+agent-browser find role button click --name "Submit"
+agent-browser find placeholder "Search" type "query"
+agent-browser find testid "submit-btn" click
+```
+
+## JavaScript Evaluation (eval)
+
+Use `eval` to run JavaScript in the browser context. **Shell quoting can corrupt complex expressions** -- use `--stdin` or `-b` to avoid issues.
+
+```bash
+# Simple expressions work with regular quoting
+agent-browser eval 'document.title'
+agent-browser eval 'document.querySelectorAll("img").length'
+
+# Complex JS: use --stdin with heredoc (RECOMMENDED)
+agent-browser eval --stdin <<'EVALEOF'
+JSON.stringify(
+  Array.from(document.querySelectorAll("img"))
+    .filter(i => !i.alt)
+    .map(i => ({ src: i.src.split("/").pop(), width: i.width }))
+)
+EVALEOF
+
+# Alternative: base64 encoding (avoids all shell escaping issues)
+agent-browser eval -b "$(echo -n 'Array.from(document.querySelectorAll("a")).map(a => a.href)' | base64)"
+```
+
+**Why this matters:** When the shell processes your command, inner double quotes, `!` characters (history expansion), backticks, and `$()` can all corrupt the JavaScript before it reaches agent-browser. The `--stdin` and `-b` flags bypass shell interpretation entirely.
+
+**Rules of thumb:**
+- Single-line, no nested quotes -> regular `eval 'expression'` with single quotes is fine
+- Nested quotes, arrow functions, template literals, or multiline -> use `eval --stdin <<'EVALEOF'`
+- Programmatic/generated scripts -> use `eval -b` with base64
+
+## Deep-Dive Documentation
+
+| Reference | When to Use |
+|-----------|-------------|
+| [references/commands.md](references/commands.md) | Full command reference with all options |
+| [references/snapshot-refs.md](references/snapshot-refs.md) | Ref lifecycle, invalidation rules, troubleshooting |
+| [references/session-management.md](references/session-management.md) | Parallel sessions, state persistence, concurrent scraping |
+| [references/authentication.md](references/authentication.md) | Login flows, OAuth, 2FA handling, state reuse |
+| [references/video-recording.md](references/video-recording.md) | Recording workflows for debugging and documentation |
+| [references/proxy-support.md](references/proxy-support.md) | Proxy configuration, geo-testing, rotating proxies |
+
+## Ready-to-Use Templates
+
+| Template | Description |
+|----------|-------------|
+| [templates/form-automation.sh](templates/form-automation.sh) | Form filling with validation |
+| [templates/authenticated-session.sh](templates/authenticated-session.sh) | Login once, reuse state |
+| [templates/capture-workflow.sh](templates/capture-workflow.sh) | Content extraction with screenshots |
+
+```bash
+./templates/form-automation.sh https://example.com/form
+./templates/authenticated-session.sh https://app.example.com/login
+./templates/capture-workflow.sh https://example.com ./output
+```
+
+
+ARGUMENTS: Google Play Console에서 com.runvision.runvision 앱에 Wear OS 형태(form factor)를 추가하는 옵션이 있는지 확인해주세요. play.google.com/console 에 접속하여 확인해주세요.
+
+---
+
+윈도우즈의 아래 url 에 자세히 나온다. 접속해봐라. https://play.google.REDACTED?tab=releaseTypes
+
+---
+
+나는 wear os 도 일반 production 사용자가 설치하게 하고 싶은거다.
+
+---
+
+\\wsl.localhost\Ubuntu-24.04\home\jhkim\00.Projects\00.RunVision\Docs\runvision-wear 여기에 있는 runvision_screen png 파일들을 google store 등록용으로 512x512 가로세로 1:1 비율로 만들어서 새이름으로 저장해다오.
+
+---
+
+그런데 새로운 폼팩터를 추가하면 내부테스트부터 시작하는데?
+
+---
+
+This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.
+
+Summary:
+1. Primary Request and Intent:
+   - Get runvision-wear (Galaxy Watch app) distributed to production users without the 12-tester closed testing requirement that kept causing rejection
+   - Build new versions (1.0.5, 1.0.6) of runvision-wear
+   - Investigate companion app approach to bypass 12-tester requirement
+   - Embed wear module into existing production Flutter phone app (com.runvision.runvision)
+   - Resize Wear OS screenshots to 512x512 for Google Play Store
+   - Find a way to publish Wear OS app directly to production users
+
+2. Key Technical Concepts:
+   - Google Play closed testing 12-tester + 14-day requirement for Wear OS standalone apps
+   - Android `wearApp()` Gradle dependency for embedding wear module in phone app
+   - Legacy embedded micro APK model (deprecated March 2021) vs Modern Multi-APK model
+   - `wearApp(files(...))` vs `wearApp(project(':wear'))` — AGP 8.x requires project reference
+   - AGP (Android Gradle Plugin) version compatibility: Flutter uses 8.7.3, wear uses 8.2.0
+   - Kotlin version compatibility: Flutter uses 2.1.0, wear uses 1.9.20
+   - KSP (Kotlin Symbol Processing) — must match Kotlin version (2.1.0 → 2.1.0-1.0.29)
+   - New Compose compiler plugin (`org.jetbrains.kotlin.plugin.compose`) required for Kotlin 2.1.0
+   - `applicationId` vs `namespace` — can differ; only `applicationId` affects store identity
+   - `wearApp` requires phone and wear to have same `applicationId`
+   - Modern Multi-APK: separate Wear OS track within same app entry in Play Console
+   - Play Console "폼 팩터" (Form Factor) — Wear OS form factor already added to com.runvision.runvision
+   - WiFi ADB pairing: requires `adb pair` then `adb connect`; WSL2 adb (34.0.4) has bug; SDK adb (36.0.2) works
+
+3. Files and Code Sections:
+   - `runvision-wear/app/build.gradle.kts`
+     - Bumped versionCode 4→5→6
+     - Attempted wear.compose 1.2.1→1.5.0 (reverted, requires compileSdk 35)
+     - Key: `versionCode = 6`, `versionName = "1.0.6"`, `applicationId = "com.runvision.wear"`
+
+   - `runvision/android/app/build.gradle`
+     - Added `wearApp files('../wear/wear-release.apk')` (failed with AGP 8.7.3)
+     - Changed to `wearApp project(':wear')` (correct approach)
+     - `applicationId "com.runvision.runvision"`, `compileSdk 36`, `targetSdk 35`
+
+   - `runvision/android/settings.gradle`
+     - Added KSP plugin `2.1.0-1.0.29` and Compose plugin `2.1.0`
+     - Added `include ':wear'`
+     ```groovy
+     plugins {
+         id "dev.flutter.flutter-plugin-loader" version "1.0.0"
+         id "com.android.application" version "8.7.3" apply false
+         id "org.jetbrains.kotlin.android" version "2.1.0" apply false
+         id "com.google.devtools.ksp" version "2.1.0-1.0.29" apply false
+         id "org.jetbrains.kotlin.plugin.compose" version "2.1.0" apply false
+     }
+     include ":app"
+     include ":wear"
+     ```
+
+   - `runvision/android/wear/build.gradle` (NEW FILE)
+     - Wear OS module Groovy Gradle config pointing to runvision-wear sources
+     - `applicationId 'com.runvision.runvision'` (changed from `com.runvision.wear` to match phone app)
+     - Uses new Compose plugin, KSP for Room
+     - Source sets point to `../../../runvision-wear/app/src/main/`
+     - Signing config references `../../../runvision-wear/release-key.jks`
+     ```groovy
+     plugins {
+         id 'com.android.application'
+         id 'org.jetbrains.kotlin.android'
+         id 'com.google.devtools.ksp'
+         id 'org.jetbrains.kotlin.plugin.compose'
+     }
+     android {
+         namespace 'com.runvision.wear'
+         compileSdk 34
+         defaultConfig {
+             applicationId 'com.runvision.runvision'
+             minSdk 30
+             targetSdk 34
+             versionCode 6
+             versionName '1.0.6'
+         }
+         sourceSets {
+             main {
+                 java.srcDirs = ['../../../runvision-wear/app/src/main/java',
+                                '../../../runvision-wear/app/src/main/kotlin']
+                 manifest.srcFile '../../../runvision-wear/app/src/main/AndroidManifest.xml'
+                 res.srcDirs = ['../../../runvision-wear/app/src/main/res']
+             }
+         }
+     }
+     ```
+
+   - `runvision/pubspec.yaml`
+     - Version bumped from 1.0.4+10 → 1.0.5+11 (then auto-incremented by build script to 1.0.9+15)
+
+   - `runvision-wear/app/build/outputs/bundle/release/runvision-wear-1.0.6-6.aab` — built and available
+   - `runvision/build/app/outputs/bundle/release/runvision-1.0.9-15.aab` — 126MB, contains `android_wear_micro_apk.apk` (legacy embedded)
+   - `runvision/build/app/outputs/flutter-apk/app-release.apk` — 71.2MB, installed on device via ADB for testing
+   - `Docs/runvision-wear/runvision_screen{1,2,3,4,8}_store.png` — 512x512 resized from 480x480 originals
+
+   - `Docs/superpowers/plans/2026-03-18-wear-module-embed.md` — implementation plan created
+
+4. Errors and fixes:
+   - **wear.compose 1.5.0 requires compileSdk 35**: Attempted to update wear.compose from 1.2.1 to 1.5.0 to fix SecurityException warning. Failed because compileSdk=34 and AGP 8.2.0 is too old. Reverted to 1.2.1. Conclusion: SecurityException only triggers when targetSdk≥35, so not a real issue with current targetSdk=34.
+
+   - **`wearApp files(...)` fails with AGP 8.7.3**: Error: "Wear App dependency does not resolve to a directory". Fixed by switching to `wearApp project(':wear')` with proper Gradle module.
+
+   - **`isMinifyEnabled` in Groovy build.gradle**: KTS syntax used in Groovy file. Fixed by changing to `minifyEnabled false`.
+
+   - **"The main and the micro apps do not have the same package name"**: `wearApp` requires identical `applicationId`. Phone has `com.runvision.runvision`, wear had `com.runvision.wear`. Fixed by changing wear module's `applicationId` to `com.runvision.runvision`.
+
+   - **WSL2 adb pair fails**: `/usr/lib/android-sdk/platform-tools/adb` (version 34.0.4) has protocol fault bug with wireless pairing. Fixed by using `/home/jhkim/android-sdk/platform-tools/adb` (version 36.0.2).
+
+   - **"갤럭시 워치에 설치하시겠습니까?" not showing after ADB install**: ADB sideloading bypasses Play Store mechanism. The prompt only appears when installing via Play Store.
+
+   - **Legacy embedded micro APK deprecated**: The built AAB contains `base/res/raw/android_wear_micro_apk.apk` which is the deprecated (March 2021) embedded model. May not auto-install reliably. Solution: Use Modern Multi-APK approach via Play Console's Wear OS form factor track.
+
+5. Problem Solving:
+   - **12-tester requirement bypass**: Discovered that `com.runvision.runvision` already has Wear OS form factor added in Play Console with both internal testing and production tracks available. Can upload Wear OS AAB directly to the Wear OS production track without 12-tester requirement.
+   - **Companion app approach**: Explored tester community service's companion AAB (5.0MB, versionCode=1, unsigned). Signed it but versionCode too low. Ultimately found better approach via Play Console's own Wear OS form factor.
+   - **Package name conflict**: Resolved by changing wear module's applicationId to match phone app.
+
+6. All user messages:
+   - "runvision-ware 를 비공개테스트하고 프로모션 출시를 신청했는데, 반려되었다..."
+   - "갤럭시워치에서 다운받아야하죠?"
+   - "일반앱은 4명정도 다운받아도 통과했는데, 이것도 3명정도만 있어도 될까?"
+   - "일단 runvision-ware 를 새버전으로 릴리즈해야되죠? 1.0.4(4) 였나? 1.0.5(5) 로 빌드해주세요."
+   - "this version of the library has a known issue where a securityexception might be thrown on wear5(api34) devices..."
+   - "1.0.5 도 반려되었다. 1.0.6 을 만들어서 다시 신청해보겠다. 만들어달라."
+   - "버전을 넣어서 생성하는 기능은 없네요. 당신이 이 앱처럼 컴패년앱을 생성할수는 없나요?"
+   - "새앱으로 등록하면 기존 등록한 패키지, 앱이름을 못쓰게 되잖아요. 기존 등록한 패키지를 삭제하고 다시 해볼까요?"
+   - "일단 기존 내용을 commit 해야할지 살펴봐라."
+   - "runvision-iq 도 변경 사항이 있습니다."
+   - "넵."
+   - "지금 runvision apk 는 구글에 등록이 되어있다. 이것을 활용할 방법은 없나?"
+   - "지금 wear 앱은 kotlin 으로 제작되어서 합칠수가 없다."
+   - "지금 runvision apk 는 production 으로 배포되고 있다. 여기에 그냥 패키지를 버전 업만 해도 된다는 건가?"
+   - "그럼 이렇게 등록하면 워치에서도 runvision 으로 검색해서 설치할수있다는건가?"
+   - "가민워치를 사용하는 사람도 '워치에 설치하시겠습니까' 하는 안내메새지를 보겠네?"
+   - "아하... 이편이 제일 확실한거네..."
+   - "일단 기존 내용을 commit 해야할지 살펴봐라."
+   - "runvision-iq 도 변경 사항이 있습니다." (second time for runvision-iq)
+   - "넵." (to commit all three repos)
+   - "네..." (to proceed with Flutter wear module embedding)
+   - "이전에 빌드된것을 그냥 1.0.5 로 올렸는데 괜찮은거에요?"
+   - "1.0.5 도 반려되었다..." (already listed)
+   - "내가 테스트 안해봐도 될까요?"
+   - "aab 와 apk 파일의 위치는?"
+   - "이전 apk 로 설치하면 '갤럭시워치에 설치하시겠습니까?' 하는 문구가 안뜨잖아요."
+   - "wifi adb 192.192.192.250:35703 에 설치해다오."
+   - "바뀌었다. 다시 페어링해라. 192.192.192.250:33607 434785"
+   - "바뀌었다. 다시 페어링해라. 192.192.192.250:38439 718896" (multiple times)
+   - "'갤럭시 워치에 설치하시겠습니까?' 라는게 안나오는데?"
+   - "만약에 나중에 갤럭시워치 샀다면 어떻게 해야하지?"
+   - "흠..확실하게 검증하라."
+   - "당신이 agent-browser 를 사용하여 확인해주세요."
+   - "내부테스트를 해보라는거구나."
+   - "그리고, 폰에서 google store 에 접속해서 설치할때 갤럭시워치가 페어링되어있으면 이때 문구가 나오는거고."
+   - "만약에 나중에 갤럭시워치 샀다면 어떻게 해야하지?"
+   - "흠..확실하게 검증하라."
+   - "당신이 agent-browser 를 사용하여 확인해주세요."
+   - "윈도우즈의 아래 url 에 자세히 나온다..."
+   - "나는 wear os 도 일반 production 사용자가 설치하게 하고 싶은거다."
+   - "워치앱의 id 를 바꾸는 방법도 있죠."
+   - "네...그리고, 기존 runvision app 사용자는 0명입니다. 방금 출시했습니다."
+   - "폰도 기존 UI 가 그대로 다 나와야한다."
+   - "이 컴패넌 앱을 기존의 테스트 패키지에 등록해서 사용할수있나요?"
+   - "그런데, 기존 패키지는 WearOS 영역이라서 못 올리거나 패키지 영역을 바꿔야하지 않나요?"
+   - "그런데 새로운 폼팩터를 추가하면 내부테스트부터 시작하는데?"
+   - "\\wsl.localhost\Ubuntu-24.04\home\jhkim\00.Projects\00.RunVision\Docs\runvision-wear 여기에 있는 runvision_screen png 파일들을 google store 등록용으로 512x512..."
+
+7. Pending Tasks:
+   - Build a Wear OS-only AAB with `applicationId = com.runvision.runvision` from `runvision-wear` project to upload to the Wear OS production track in Play Console
+   - Complete the Wear OS form factor setup steps: screenshots (✅ done), test track upload, policy agreement
+   - Determine if Wear OS production track requires internal testing first or can go direct to production
+   - Upload Wear OS screenshots (512x512 files already created) to Play Console
+   - The 512x512 store screenshots are ready at `Docs/runvision-wear/runvision_screen{1,2,3,4,8}_store.png`
+
+8. Current Work:
+   Investigating Play Console's Wear OS form factor setup for `com.runvision.runvision`. Navigated to the advanced distribution page which shows:
+   - Wear OS form factor already added (1/3 complete)
+   - Step 1 ✅: "모든 스토어 등록정보에 Wear OS 스크린샷 업로드" (completed)
+   - Step 2 ○: "테스트 트랙에 Wear OS App Bundle 또는 APK 출시"
+   - Step 3 🔒: "Wear OS 선택 및 검토 정책에 동의" (locked)
+   
+   The user asked "그런데 새로운 폼팩터를 추가하면 내부테스트부터 시작하는데?" questioning whether the Wear OS track requires starting from internal testing before production. We navigated to the production track and found it shows "Wear OS 트랙 요약 - 비활성" with "새 버전 만들기" button available, but the advanced distribution checklist shows Step 2 requires test track upload before Step 3 (policy agreement) unlocks.
+
+9. Optional Next Step:
+   The user's most recent question was "그런데 새로운 폼팩터를 추가하면 내부테스트부터 시작하는데?" and the screenshot showed the 고급 설정 page with Wear OS at 1/3 complete — Step 2 "테스트 트랙에 Wear OS App Bundle 또는 APK 출시" is required before Step 3 unlocks. The next step is to clarify whether the mandatory sequence requires internal testing before production for the Wear OS track, and then build the Wear OS-only AAB with `applicationId = com.runvision.runvision` to upload to whichever track is required first.
+
+If you need specific details from before compaction (like exact code snippets, error messages, or content you generated), read the full transcript at: /home/jhkim/.REDACTED.jsonl
+Continue the conversation from where it left off without asking the user any further questions. Resume directly — do not acknowledge the summary, do not recap what was happening, do not preface with "I'll continue" or similar. Pick up the last task as if the break never happened.
+
+---
+
+Base directory for this skill: /home/jhkim/.claude/skills/agent-browser
+
+# Browser Automation with agent-browser
+
+## Core Workflow
+
+Every browser automation follows this pattern:
+
+1. **Navigate**: `agent-browser open <url>`
+2. **Snapshot**: `agent-browser snapshot -i` (get element refs like `@e1`, `@e2`)
+3. **Interact**: Use refs to click, fill, select
+4. **Re-snapshot**: After navigation or DOM changes, get fresh refs
+
+```bash
+agent-browser open https://example.com/form
+agent-browser snapshot -i
+# Output: @e1 [input type="email"], @e2 [input type="password"], @e3 [button] "Submit"
+
+agent-browser fill @e1 "user@example.com"
+agent-browser fill @e2 "password123"
+agent-browser click @e3
+agent-browser wait --load networkidle
+agent-browser snapshot -i  # Check result
+```
+
+## Essential Commands
+
+```bash
+# Navigation
+agent-browser open <url>              # Navigate (aliases: goto, navigate)
+agent-browser close                   # Close browser
+
+# Snapshot
+agent-browser snapshot -i             # Interactive elements with refs (recommended)
+agent-browser snapshot -i -C          # Include cursor-interactive elements (divs with onclick, cursor:pointer)
+agent-browser snapshot -s "#selector" # Scope to CSS selector
+
+# Interaction (use @refs from snapshot)
+agent-browser click @e1               # Click element
+agent-browser fill @e2 "text"         # Clear and type text
+agent-browser type @e2 "text"         # Type without clearing
+agent-browser select @e1 "option"     # Select dropdown option
+agent-browser check @e1               # Check checkbox
+agent-browser press Enter             # Press key
+agent-browser scroll down 500         # Scroll page
+
+# Get information
+agent-browser get text @e1            # Get element text
+agent-browser get url                 # Get current URL
+agent-browser get title               # Get page title
+
+# Wait
+agent-browser wait @e1                # Wait for element
+agent-browser wait --load networkidle # Wait for network idle
+agent-browser wait --url "**/page"    # Wait for URL pattern
+agent-browser wait 2000               # Wait milliseconds
+
+# Capture
+agent-browser screenshot              # Screenshot to temp dir
+agent-browser screenshot --full       # Full page screenshot
+agent-browser pdf output.pdf          # Save as PDF
+```
+
+## Common Patterns
+
+### Form Submission
+
+```bash
+agent-browser open https://example.com/signup
+agent-browser snapshot -i
+agent-browser fill @e1 "Jane Doe"
+agent-browser fill @e2 "jane@example.com"
+agent-browser select @e3 "California"
+agent-browser check @e4
+agent-browser click @e5
+agent-browser wait --load networkidle
+```
+
+### Authentication with State Persistence
+
+```bash
+# Login once and save state
+agent-browser open https://app.example.com/login
+agent-browser snapshot -i
+agent-browser fill @e1 "$USERNAME"
+agent-browser fill @e2 "$PASSWORD"
+agent-browser click @e3
+agent-browser wait --url "**/dashboard"
+agent-browser state save auth.json
+
+# Reuse in future sessions
+agent-browser state load auth.json
+agent-browser open https://app.example.com/dashboard
+```
+
+### Session Persistence
+
+```bash
+# Auto-save/restore cookies and localStorage across browser restarts
+agent-browser --session-name myapp open https://app.example.com/login
+# ... login flow ...
+agent-browser close  # State auto-saved to ~/.agent-browser/sessions/
+
+# Next time, state is auto-loaded
+agent-browser --session-name myapp open https://app.example.com/dashboard
+
+# Encrypt state at rest
+export AGENT_BROWSER_ENCRYPTION_KEY=$(openssl rand -hex 32)
+agent-browser --session-name secure open https://app.example.com
+
+# Manage saved states
+agent-browser state list
+agent-browser state show myapp-default.json
+agent-browser state clear myapp
+agent-browser state clean --older-than 7
+```
+
+### Data Extraction
+
+```bash
+agent-browser open https://example.com/products
+agent-browser snapshot -i
+agent-browser get text @e5           # Get specific element text
+agent-browser get text body > page.txt  # Get all page text
+
+# JSON output for parsing
+agent-browser snapshot -i --json
+agent-browser get text @e1 --json
+```
+
+### Parallel Sessions
+
+```bash
+agent-browser --session site1 open https://site-a.com
+agent-browser --session site2 open https://site-b.com
+
+agent-browser --session site1 snapshot -i
+agent-browser --session site2 snapshot -i
+
+agent-browser session list
+```
+
+### Connect to Existing Chrome
+
+```bash
+# Auto-discover running Chrome with remote debugging enabled
+agent-browser --auto-connect open https://example.com
+agent-browser --auto-connect snapshot
+
+# Or with explicit CDP port
+agent-browser --cdp 9222 snapshot
+```
+
+### Visual Browser (Debugging)
+
+```bash
+agent-browser --headed open https://example.com
+agent-browser highlight @e1          # Highlight element
+agent-browser record start demo.webm # Record session
+```
+
+### Local Files (PDFs, HTML)
+
+```bash
+# Open local files with file:// URLs
+agent-browser --allow-file-access open file:///path/to/document.pdf
+agent-browser --allow-file-access open file:///path/to/page.html
+agent-browser screenshot output.png
+```
+
+### iOS Simulator (Mobile Safari)
+
+```bash
+# List available iOS simulators
+agent-browser device list
+
+# Launch Safari on a specific device
+agent-browser -p ios --device "iPhone 16 Pro" open https://example.com
+
+# Same workflow as desktop - snapshot, interact, re-snapshot
+agent-browser -p ios snapshot -i
+agent-browser -p ios tap @e1          # Tap (alias for click)
+agent-browser -p ios fill @e2 "text"
+agent-browser -p ios swipe up         # Mobile-specific gesture
+
+# Take screenshot
+agent-browser -p ios screenshot mobile.png
+
+# Close session (shuts down simulator)
+agent-browser -p ios close
+```
+
+**Requirements:** macOS with Xcode, Appium (`npm install -g appium && appium driver install xcuitest`)
+
+**Real devices:** Works with physical iOS devices if pre-configured. Use `--device "<UDID>"` where UDID is from `xcrun xctrace list devices`.
+
+## Ref Lifecycle (Important)
+
+Refs (`@e1`, `@e2`, etc.) are invalidated when the page changes. Always re-snapshot after:
+
+- Clicking links or buttons that navigate
+- Form submissions
+- Dynamic content loading (dropdowns, modals)
+
+```bash
+agent-browser click @e5              # Navigates to new page
+agent-browser snapshot -i            # MUST re-snapshot
+agent-browser click @e1              # Use new refs
+```
+
+## Semantic Locators (Alternative to Refs)
+
+When refs are unavailable or unreliable, use semantic locators:
+
+```bash
+agent-browser find text "Sign In" click
+agent-browser find label "Email" fill "user@test.com"
+agent-browser find role button click --name "Submit"
+agent-browser find placeholder "Search" type "query"
+agent-browser find testid "submit-btn" click
+```
+
+## JavaScript Evaluation (eval)
+
+Use `eval` to run JavaScript in the browser context. **Shell quoting can corrupt complex expressions** -- use `--stdin` or `-b` to avoid issues.
+
+```bash
+# Simple expressions work with regular quoting
+agent-browser eval 'document.title'
+agent-browser eval 'document.querySelectorAll("img").length'
+
+# Complex JS: use --stdin with heredoc (RECOMMENDED)
+agent-browser eval --stdin <<'EVALEOF'
+JSON.stringify(
+  Array.from(document.querySelectorAll("img"))
+    .filter(i => !i.alt)
+    .map(i => ({ src: i.src.split("/").pop(), width: i.width }))
+)
+EVALEOF
+
+# Alternative: base64 encoding (avoids all shell escaping issues)
+agent-browser eval -b "$(echo -n 'Array.from(document.querySelectorAll("a")).map(a => a.href)' | base64)"
+```
+
+**Why this matters:** When the shell processes your command, inner double quotes, `!` characters (history expansion), backticks, and `$()` can all corrupt the JavaScript before it reaches agent-browser. The `--stdin` and `-b` flags bypass shell interpretation entirely.
+
+**Rules of thumb:**
+- Single-line, no nested quotes -> regular `eval 'expression'` with single quotes is fine
+- Nested quotes, arrow functions, template literals, or multiline -> use `eval --stdin <<'EVALEOF'`
+- Programmatic/generated scripts -> use `eval -b` with base64
+
+## Deep-Dive Documentation
+
+| Reference | When to Use |
+|-----------|-------------|
+| [references/commands.md](references/commands.md) | Full command reference with all options |
+| [references/snapshot-refs.md](references/snapshot-refs.md) | Ref lifecycle, invalidation rules, troubleshooting |
+| [references/session-management.md](references/session-management.md) | Parallel sessions, state persistence, concurrent scraping |
+| [references/authentication.md](references/authentication.md) | Login flows, OAuth, 2FA handling, state reuse |
+| [references/video-recording.md](references/video-recording.md) | Recording workflows for debugging and documentation |
+| [references/proxy-support.md](references/proxy-support.md) | Proxy configuration, geo-testing, rotating proxies |
+
+## Ready-to-Use Templates
+
+| Template | Description |
+|----------|-------------|
+| [templates/form-automation.sh](templates/form-automation.sh) | Form filling with validation |
+| [templates/authenticated-session.sh](templates/authenticated-session.sh) | Login once, reuse state |
+| [templates/capture-workflow.sh](templates/capture-workflow.sh) | Content extraction with screenshots |
+
+```bash
+./templates/form-automation.sh https://example.com/form
+./templates/authenticated-session.sh https://app.example.com/login
+./templates/capture-workflow.sh https://example.com ./output
+```
+
+
+ARGUMENTS: Play Console Wear OS 내부 테스트 트랙에 AAB 업로드 방법 확인. 
+파일 경로: /home/jhkim/00.Projects/00.RunVision/runvision-wear/app/build/outputs/bundle/release/runvision-wear-1.0.6-6-runvision.aab (7.3MB, applicationId=com.runvision.runvision, versionCode=6, Wear OS app)
+play.google.com/console 에 이미 로그인되어있을것이다. com.runvision.runvision 앱의 Wear OS 내부 테스트 트랙으로 이동하여 업로드 방법을 확인해주세요. 업로드는 직접 하지 말고 스냅샷만 보여주세요.

@@ -1,0 +1,30 @@
+{
+  "cli_version": "dev",
+  "checkpoint_id": "cebaa6b3d3ba",
+  "session_id": "aab613c7-2dbe-4f1a-a557-d9343b4c5b2c",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-18T03:25:47.031570236Z",
+  "branch": "main",
+  "checkpoints_count": 5,
+  "files_touched": [
+    "app/build.gradle.kts"
+  ],
+  "agent": "Claude Code",
+  "token_usage": {
+    "input_tokens": 318,
+    "cache_creation_tokens": 681557,
+    "cache_read_tokens": 17124198,
+    "output_tokens": 94782,
+    "api_call_count": 180
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-18T03:25:46.696841855Z",
+    "agent_lines": 2,
+    "human_added": 0,
+    "human_modified": 1,
+    "human_removed": 0,
+    "total_committed": 3,
+    "agent_percentage": 66.66666666666666
+  },
+  "transcript_path": ".claude/projects/-home-jhkim-00-Projects-00-RunVision/aab613c7-2dbe-4f1a-a557-d9343b4c5b2c.jsonl"
+}

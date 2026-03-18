@@ -1,0 +1,26 @@
+{
+  "cli_version": "dev",
+  "checkpoint_id": "cebaa6b3d3ba",
+  "strategy": "manual-commit",
+  "branch": "main",
+  "checkpoints_count": 5,
+  "files_touched": [
+    "app/build.gradle.kts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/ce/baa6b3d3ba/0/metadata.json",
+      "transcript": "/ce/baa6b3d3ba/0/full.jsonl",
+      "context": "/ce/baa6b3d3ba/0/context.md",
+      "content_hash": "/ce/baa6b3d3ba/0/content_hash.txt",
+      "prompt": "/ce/baa6b3d3ba/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 318,
+    "cache_creation_tokens": 681557,
+    "cache_read_tokens": 17124198,
+    "output_tokens": 94782,
+    "api_call_count": 180
+  }
+}
