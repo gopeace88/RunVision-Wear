@@ -3,6 +3,10 @@ package com.runvision.wear.ui.screens
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.wear.compose.material.PositionIndicator
+import androidx.wear.compose.material.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -13,6 +17,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.wear.compose.material.*
@@ -41,63 +46,80 @@ fun RunningScreen(
 
 /**
  * Ambient Mode UI - simplified, low-power display
- * - Black background with dim white text
- * - No icons, no buttons (saves battery, prevents burn-in)
- * - Essential metrics only: time, HR, distance
  */
 @Composable
 private fun AmbientRunningScreen(metrics: RunningMetrics) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black),
-        contentAlignment = Alignment.Center
+    val scrollState = rememberScrollState()
+
+    Scaffold(
+        positionIndicator = {
+            PositionIndicator(scrollState = scrollState)
+        }
     ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black),
+            contentAlignment = Alignment.Center
+        ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+            verticalArrangement = Arrangement.Center,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp)
+                .verticalScroll(scrollState)
         ) {
-            // Elapsed time (large, prominent)
             Text(
                 text = metrics.elapsedFormatted,
                 fontSize = 36.sp,
                 fontWeight = FontWeight.Light,
                 fontFamily = FontFamily.Monospace,
                 color = Color.White,
-                textAlign = TextAlign.Center
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.fillMaxWidth()
             )
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
-            // Heart Rate
             Row(
+                modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Center
             ) {
                 Text(
                     text = "♥",
-                    fontSize = 18.sp,
-                    color = Color(0xFFAAAAAA)  // Dim gray
+                    fontSize = 16.sp,
+                    color = Color(0xFFAAAAAA),
+                    maxLines = 1
                 )
-                Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(6.dp))
                 Text(
                     text = "${metrics.heartRate}",
-                    fontSize = 24.sp,
+                    fontSize = 22.sp,
                     fontWeight = FontWeight.Normal,
                     fontFamily = FontFamily.Monospace,
-                    color = Color.White
+                    color = Color.White,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(6.dp))
 
-            // Distance
             Text(
                 text = "${metrics.distanceKmFormatted} km",
-                fontSize = 18.sp,
+                fontSize = 16.sp,
                 fontWeight = FontWeight.Light,
-                color = Color(0xFFAAAAAA)  // Dim gray
+                color = Color(0xFFAAAAAA),
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.fillMaxWidth()
             )
+        }
         }
     }
 }
@@ -113,7 +135,6 @@ private fun InteractiveRunningScreen(
     onStopClick: () -> Unit,
     onScreenTouch: () -> Unit
 ) {
-    // Current time (updates with metrics)
     val currentTime = remember(metrics.elapsedSeconds) {
         SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
     }
@@ -123,89 +144,99 @@ private fun InteractiveRunningScreen(
             .fillMaxSize()
             .background(Color.Black)
             .pointerInput(Unit) {
-                detectTapGestures(
-                    onTap = { onScreenTouch() }
-                )
+                detectTapGestures(onTap = { onScreenTouch() })
             }
     ) {
-        // Main content column - centered vertically
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
             modifier = Modifier
                 .fillMaxWidth()
                 .align(Alignment.Center)
-                .padding(bottom = 40.dp)  // Offset to account for buttons
+                .padding(horizontal = 12.dp)
+                .padding(bottom = 44.dp)
         ) {
-            // Top: Current Time + Elapsed Time (same size, both important)
+            // Time row: each item gets equal weight so they can't overflow
             Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Current time (white)
                 Text(
                     text = currentTime,
-                    fontSize = 24.sp,
+                    fontSize = 22.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color.White
+                    color = Color.White,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                    textAlign = TextAlign.End
                 )
-                // Separator
                 Text(
-                    text = "│",
-                    fontSize = 20.sp,
-                    color = Color.Gray
+                    text = " │ ",
+                    fontSize = 18.sp,
+                    color = Color.Gray,
+                    maxLines = 1
                 )
-                // Elapsed time (green when running, yellow when paused)
                 Text(
                     text = if (isPaused) "⏸ ${metrics.elapsedFormatted}" else metrics.elapsedFormatted,
-                    fontSize = 24.sp,
+                    fontSize = 22.sp,
                     fontWeight = FontWeight.Bold,
-                    color = if (isPaused) Color(0xFFFFEB3B) else Color(0xFF00FF00)
+                    color = if (isPaused) Color(0xFFFFEB3B) else Color(0xFF00FF00),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                    textAlign = TextAlign.Start
                 )
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
-            // 2x2 Grid (rLens layout)
+            // 2x2 Grid — each row fills full width, each MetricItem gets half
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier.fillMaxWidth()
             ) {
-                // Row 1: Pace, Cadence
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     MetricItem(
                         icon = painterResource(R.drawable.ic_runner),
                         value = metrics.paceFormatted,
-                        color = CyanPace
+                        color = CyanPace,
+                        modifier = Modifier.weight(1f)
                     )
                     MetricItem(
                         icon = painterResource(R.drawable.ic_shoe),
                         value = "${metrics.cadence}",
-                        color = GreenCadence
+                        color = GreenCadence,
+                        modifier = Modifier.weight(1f)
                     )
                 }
 
-                // Row 2: Distance, Heart Rate
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     MetricItem(
                         icon = painterResource(R.drawable.ic_route),
                         value = metrics.distanceKmFormatted,
-                        color = OrangeDistance
+                        color = OrangeDistance,
+                        modifier = Modifier.weight(1f)
                     )
                     MetricItem(
                         icon = painterResource(R.drawable.ic_heart),
                         value = "${metrics.heartRate}",
-                        color = RedHeart
+                        color = RedHeart,
+                        modifier = Modifier.weight(1f)
                     )
                 }
             }
         }
 
-        // Bottom Buttons - closer to content
+        // Bottom Buttons
         Row(
             modifier = Modifier
                 .align(Alignment.BottomCenter)

@@ -8,11 +8,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.wear.compose.material.Button
-import androidx.wear.compose.material.ButtonDefaults
-import androidx.wear.compose.material.Text
+import androidx.wear.compose.material.*
 import com.runvision.wear.ble.RLensConnection
 
 @Composable
@@ -20,56 +19,83 @@ fun HomeScreen(
     connectionState: RLensConnection.ConnectionState,
     onStartClick: () -> Unit
 ) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black),
-        contentAlignment = Alignment.Center
+    val listState = rememberScalingLazyListState()
+
+    Scaffold(
+        positionIndicator = {
+            PositionIndicator(scalingLazyListState = listState)
+        }
     ) {
-        Column(
+        ScalingLazyColumn(
+            state = listState,
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black)
         ) {
-            Text(
-                text = "RunVision",
-                fontSize = 28.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.White
-            )
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            Button(
-                onClick = onStartClick,
-                modifier = Modifier.size(width = 100.dp, height = 50.dp),
-                colors = ButtonDefaults.primaryButtonColors()
-            ) {
+            item {
                 Text(
-                    text = "START",
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold
+                    text = "RunVision",
+                    fontSize = 28.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                    textAlign = TextAlign.Center,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
                 )
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
-
-            // Status text based on connection state
-            val (statusText, statusColor) = when (connectionState) {
-                RLensConnection.ConnectionState.CONNECTED -> "Connected" to Color(0xFF4CAF50)
-                RLensConnection.ConnectionState.CONNECTING -> "Connecting.." to Color(0xFFFF9800)
-                RLensConnection.ConnectionState.RECONNECTING -> "Reconnecting.." to Color(0xFFFF9800)
-                RLensConnection.ConnectionState.SCANNING -> "Scanning.." to Color(0xFF2196F3)
-                RLensConnection.ConnectionState.NOT_FOUND -> "Not Found" to Color(0xFFF44336)
-                RLensConnection.ConnectionState.DISCONNECTED -> "READY" to Color.Gray
+            item {
+                Spacer(modifier = Modifier.height(12.dp))
             }
 
-            Text(
-                text = statusText,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Medium,
-                color = statusColor,
-                textAlign = TextAlign.Center
-            )
+            item {
+                Button(
+                    onClick = onStartClick,
+                    modifier = Modifier
+                        .fillMaxWidth(0.6f)
+                        .padding(horizontal = 8.dp),
+                    colors = ButtonDefaults.primaryButtonColors()
+                ) {
+                    Text(
+                        text = "START",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+
+            item {
+                Spacer(modifier = Modifier.height(12.dp))
+            }
+
+            item {
+                val (statusText, statusColor) = when (connectionState) {
+                    RLensConnection.ConnectionState.CONNECTED -> "Connected" to Color(0xFF4CAF50)
+                    RLensConnection.ConnectionState.CONNECTING -> "Connecting.." to Color(0xFFFF9800)
+                    RLensConnection.ConnectionState.RECONNECTING -> "Reconnecting.." to Color(0xFFFF9800)
+                    RLensConnection.ConnectionState.SCANNING -> "Scanning.." to Color(0xFF2196F3)
+                    RLensConnection.ConnectionState.NOT_FOUND -> "Not Found" to Color(0xFFF44336)
+                    RLensConnection.ConnectionState.DISCONNECTED -> "READY" to Color.Gray
+                }
+                Text(
+                    text = statusText,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = statusColor,
+                    textAlign = TextAlign.Center,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                )
+            }
         }
     }
 }

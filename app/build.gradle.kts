@@ -19,19 +19,19 @@ android {
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.runvision.wear"
+        applicationId = "com.runvision.runvision"
         minSdk = 30
         targetSdk = 34
-        versionCode = 6
-        versionName = "1.0.6"
+        versionCode = 14
+        versionName = "1.0.14"
     }
 
     signingConfigs {
         create("release") {
-            storeFile = rootProject.file(keystoreProperties.getProperty("storeFile") ?: "release-key.jks")
-            storePassword = keystoreProperties.getProperty("storePassword") ?: ""
-            keyAlias = keystoreProperties.getProperty("keyAlias") ?: "runvision-wear"
-            keyPassword = keystoreProperties.getProperty("keyPassword") ?: ""
+            storeFile = file("../../runvision/android/app/upload-keystore.jks")
+            storePassword = "gopeace123!"
+            keyAlias = "upload"
+            keyPassword = "gopeace123!"
         }
     }
 
