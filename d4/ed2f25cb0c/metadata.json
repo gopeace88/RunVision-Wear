@@ -1,0 +1,29 @@
+{
+  "cli_version": "dev",
+  "checkpoint_id": "d4ed2f25cb0c",
+  "strategy": "manual-commit",
+  "branch": "main",
+  "checkpoints_count": 9,
+  "files_touched": [
+    "app/build.gradle.kts",
+    "app/src/main/kotlin/com/runvision/wear/ui/components/MetricItem.kt",
+    "app/src/main/kotlin/com/runvision/wear/ui/screens/HomeScreen.kt",
+    "app/src/main/kotlin/com/runvision/wear/ui/screens/RunningScreen.kt"
+  ],
+  "sessions": [
+    {
+      "metadata": "/d4/ed2f25cb0c/0/metadata.json",
+      "transcript": "/d4/ed2f25cb0c/0/full.jsonl",
+      "context": "/d4/ed2f25cb0c/0/context.md",
+      "content_hash": "/d4/ed2f25cb0c/0/content_hash.txt",
+      "prompt": "/d4/ed2f25cb0c/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 206,
+    "cache_creation_tokens": 475245,
+    "cache_read_tokens": 11710532,
+    "output_tokens": 57375,
+    "api_call_count": 120
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "cli_version": "dev",
+  "checkpoint_id": "d4ed2f25cb0c",
+  "session_id": "aab613c7-2dbe-4f1a-a557-d9343b4c5b2c",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-18T12:20:11.147110181Z",
+  "branch": "main",
+  "checkpoints_count": 9,
+  "files_touched": [
+    "app/build.gradle.kts",
+    "app/src/main/kotlin/com/runvision/wear/ui/components/MetricItem.kt",
+    "app/src/main/kotlin/com/runvision/wear/ui/screens/HomeScreen.kt",
+    "app/src/main/kotlin/com/runvision/wear/ui/screens/RunningScreen.kt"
+  ],
+  "agent": "Claude Code",
+  "transcript_identifier_at_start": "00a944ab-e4af-4242-bb51-4f368b4c2e58",
+  "checkpoint_transcript_start": 1370,
+  "transcript_lines_at_start": 1370,
+  "token_usage": {
+    "input_tokens": 206,
+    "cache_creation_tokens": 475245,
+    "cache_read_tokens": 11710532,
+    "output_tokens": 57375,
+    "api_call_count": 120
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-18T12:20:10.558491138Z",
+    "agent_lines": 426,
+    "human_added": 0,
+    "human_modified": 1,
+    "human_removed": 0,
+    "total_committed": 427,
+    "agent_percentage": 99.76580796252928
+  },
+  "transcript_path": ".claude/projects/-home-jhkim-00-Projects-00-RunVision/aab613c7-2dbe-4f1a-a557-d9343b4c5b2c.jsonl"
+}
