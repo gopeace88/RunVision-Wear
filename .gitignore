@@ -23,3 +23,7 @@ app/release/
 
 # Kotlin
 *.kotlin_module
+
+# AI/MCP tool local settings
+.claude/
+.entire/
