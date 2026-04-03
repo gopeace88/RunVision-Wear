@@ -1,0 +1,27 @@
+{
+  "cli_version": "dev",
+  "checkpoint_id": "a0d2807309b2",
+  "strategy": "manual-commit",
+  "branch": "main",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "app/build.gradle.kts",
+    "app/src/main/kotlin/com/runvision/wear/ble/RLensScanner.kt"
+  ],
+  "sessions": [
+    {
+      "metadata": "/a0/d2807309b2/0/metadata.json",
+      "transcript": "/a0/d2807309b2/0/full.jsonl",
+      "context": "/a0/d2807309b2/0/context.md",
+      "content_hash": "/a0/d2807309b2/0/content_hash.txt",
+      "prompt": "/a0/d2807309b2/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 261,
+    "cache_creation_tokens": 136279,
+    "cache_read_tokens": 16246710,
+    "output_tokens": 42364,
+    "api_call_count": 167
+  }
+}
