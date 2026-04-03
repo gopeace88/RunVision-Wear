@@ -12,7 +12,7 @@ import android.util.Log
 /**
  * BLE Scanner for rLens devices
  *
- * Filters devices by name containing "ilens" or "rlens" (case-insensitive)
+ * Filters devices by name containing "rlens" (case-insensitive)
  * Also checks raw scan record bytes for device name (some devices advertise there)
  *
  * Reference: runvision-iq/source/RunVisionIQView.mc:778-801
@@ -42,9 +42,9 @@ class RLensScanner(
                 String(bytes.filter { it in 0x20..0x7E }.toByteArray())
             }?.lowercase() ?: ""
 
-            // Filter: "ilens" or "rlens" (case-insensitive, backward compatible)
-            if (deviceName.contains("ilens") || deviceName.contains("rlens") ||
-                scanRecord.contains("ilens") || scanRecord.contains("rlens")) {
+            // Filter: "rlens" only (case-insensitive)
+            if (deviceName.contains("rlens") ||
+                scanRecord.contains("rlens")) {
                 deviceFound = true
                 Log.d(TAG, "Found rLens device: ${device.name} (${device.address})")
                 stopScan()
