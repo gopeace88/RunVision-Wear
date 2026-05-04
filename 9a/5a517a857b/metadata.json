@@ -1,0 +1,42 @@
+{
+  "cli_version": "dev",
+  "checkpoint_id": "9a5a517a857b",
+  "strategy": "manual-commit",
+  "branch": "main",
+  "checkpoints_count": 31,
+  "files_touched": [
+    "app/src/main/kotlin/com/runvision/wear/ble/RLensConnection.kt",
+    "app/src/main/kotlin/com/runvision/wear/ble/RLensScanner.kt",
+    "app/src/main/kotlin/com/runvision/wear/engine/AdaptivePaceCalculator.kt",
+    "app/src/main/kotlin/com/runvision/wear/engine/RunningEngine.kt",
+    "app/src/main/kotlin/com/runvision/wear/engine/StrideLengthLearner.kt",
+    "app/src/main/kotlin/com/runvision/wear/health/ExerciseManager.kt",
+    "app/src/main/kotlin/com/runvision/wear/service/ExerciseService.kt",
+    "app/src/main/res/drawable/ic_launcher_background.png",
+    "app/src/main/res/drawable/ic_launcher_foreground.png",
+    "app/src/main/res/drawable/ic_launcher_foreground.xml",
+    "app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml",
+    "app/src/main/res/mipmap-hdpi/ic_launcher.png",
+    "app/src/main/res/mipmap-hdpi/ic_launcher.xml",
+    "app/src/main/res/mipmap-mdpi/ic_launcher.png",
+    "app/src/main/res/mipmap-xhdpi/ic_launcher.png",
+    "app/src/main/res/mipmap-xxhdpi/ic_launcher.png",
+    "app/src/main/res/mipmap-xxxhdpi/ic_launcher.png",
+    "app/src/test/kotlin/com/runvision/wear/engine/AdaptivePaceCalculatorTest.kt"
+  ],
+  "sessions": [
+    {
+      "metadata": "/9a/5a517a857b/0/metadata.json",
+      "transcript": "/9a/5a517a857b/0/full.jsonl",
+      "content_hash": "/9a/5a517a857b/0/content_hash.txt",
+      "prompt": "/9a/5a517a857b/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 1561,
+    "cache_creation_tokens": 1565745,
+    "cache_read_tokens": 38644040,
+    "output_tokens": 311018,
+    "api_call_count": 453
+  }
+}
