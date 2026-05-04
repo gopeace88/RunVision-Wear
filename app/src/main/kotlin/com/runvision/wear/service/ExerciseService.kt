@@ -6,7 +6,9 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.os.Binder
+import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
 import android.util.Log
@@ -46,6 +48,10 @@ class ExerciseService : Service() {
         private const val NOTIFICATION_ID = 1
         // Changed channel ID to force new channel with correct priority
         private const val CHANNEL_ID = "exercise_channel_v2"
+
+        // MAC binding: prevents connecting to a nearby stranger's rLens
+        const val PREFS_NAME = "runvision_prefs"
+        const val KEY_RLENS_ADDRESS = "rlens_mac_address"
     }
 
     private val binder = LocalBinder()
@@ -62,6 +68,11 @@ class ExerciseService : Service() {
     // BLE 컴포넌트 - Service에서 직접 관리 (Activity lifecycle과 분리)
     private var rLensScanner: RLensScanner? = null
     private var rLensConnection: RLensConnection? = null
+
+    // 2-retry + new device registration mode
+    private var scanAttemptCount = 0
+    private var isInNewDeviceMode = false
+    private var currentTargetAddress: String? = null
 
     // BLE 연결 상태 (UI 관찰용)
     private val _connectionState = MutableStateFlow(RLensConnection.ConnectionState.DISCONNECTED)
@@ -119,6 +130,10 @@ class ExerciseService : Service() {
                 Log.d(TAG, "Distance update: $meters m")
                 runningEngine.updateDistance(meters)
             }
+            onStepsDeltaUpdate = { steps ->
+                Log.d(TAG, "Step delta: $steps")
+                runningEngine.updateStepsDelta(steps)
+            }
         }
 
         createNotificationChannel()
@@ -137,14 +152,35 @@ class ExerciseService : Service() {
      * Service context로 생성하여 화면 꺼져도 BLE 연결 유지
      */
     @android.annotation.SuppressLint("MissingPermission")
+    private fun createRLensScanner(targetAddress: String?): RLensScanner {
+        currentTargetAddress = targetAddress
+        val prefs = getSharedPreferences(PREFS_NAME, android.content.Context.MODE_PRIVATE)
+        return RLensScanner(
+            context = this,
+            targetAddress = targetAddress,
+            onDeviceFound = { device ->
+                Log.d(TAG, "Found rLens device: ${device.name} (${device.address})")
+                if (targetAddress == null) {
+                    // First run or new device mode: save the discovered device
+                    prefs.edit().putString(KEY_RLENS_ADDRESS, device.address).apply()
+                    Log.d(TAG, "Registered rLens: ${device.address}")
+                }
+                scanTimeoutJob?.cancel()
+                scanAttemptCount = 0
+                isInNewDeviceMode = false
+                rLensConnection?.connect(device)
+            }
+        )
+    }
+
     private fun initializeBle() {
         Log.d(TAG, "Initializing BLE components with Service context")
 
-        rLensScanner = RLensScanner(this) { device ->
-            Log.d(TAG, "Found rLens device: ${device.name}")
-            scanTimeoutJob?.cancel()  // Cancel timeout - device found
-            rLensConnection?.connect(device)
-        }
+        val prefs = getSharedPreferences(PREFS_NAME, android.content.Context.MODE_PRIVATE)
+        val savedAddress = prefs.getString(KEY_RLENS_ADDRESS, null)
+        Log.d(TAG, "Saved rLens address: ${savedAddress ?: "none (first run)"}")
+
+        rLensScanner = createRLensScanner(savedAddress)
 
         rLensConnection = RLensConnection(this) { state ->
             Log.d(TAG, "BLE connection state: $state")
@@ -160,25 +196,56 @@ class ExerciseService : Service() {
 
     // Scan timeout job
     private var scanTimeoutJob: Job? = null
-    private val SCAN_TIMEOUT_MS = 10000L  // 10 seconds
+    private val SCAN_TIMEOUT_MS = 3000L  // BLE 광고 주기 100~250ms, 3초면 충분
 
     /**
      * BLE 스캔 시작
-     * 10초 타임아웃 후 NOT_FOUND 상태로 전환
+     *
+     * 재시도 전략:
+     * - 저장된 기기: 3초×2 → 미발견 시 새 기기 등록 모드
+     * - 새 기기 등록 모드: 3초×2 → 미발견 시 NOT_FOUND
+     * - 최초 실행(저장 기기 없음): 3초×2 → 미발견 시 NOT_FOUND
      */
     fun startScanning() {
-        Log.d(TAG, "Starting BLE scan")
+        val attempt = scanAttemptCount + 1
+        val mode = if (isInNewDeviceMode) "new-device" else "saved(${currentTargetAddress ?: "any"})"
+        Log.d(TAG, "BLE scan start — attempt $attempt, mode=$mode")
         _connectionState.value = RLensConnection.ConnectionState.SCANNING
         rLensScanner?.startScan()
 
-        // Start timeout
         scanTimeoutJob?.cancel()
         scanTimeoutJob = serviceScope.launch {
             delay(SCAN_TIMEOUT_MS)
-            if (_connectionState.value == RLensConnection.ConnectionState.SCANNING) {
-                Log.w(TAG, "Scan timeout - device not found")
-                rLensScanner?.stopScan()
-                _connectionState.value = RLensConnection.ConnectionState.NOT_FOUND
+            if (_connectionState.value != RLensConnection.ConnectionState.SCANNING) return@launch
+
+            rLensScanner?.stopScan()
+            scanAttemptCount++
+            Log.w(TAG, "Scan timeout (attempt $scanAttemptCount)")
+
+            val prefs = getSharedPreferences(PREFS_NAME, android.content.Context.MODE_PRIVATE)
+
+            when {
+                // 저장된 기기 2회 실패 → 새 기기 등록 모드 진입
+                !isInNewDeviceMode && currentTargetAddress != null && scanAttemptCount >= 2 -> {
+                    Log.w(TAG, "Saved device not found — entering new device registration mode")
+                    prefs.edit().remove(KEY_RLENS_ADDRESS).apply()
+                    isInNewDeviceMode = true
+                    scanAttemptCount = 0
+                    rLensScanner = createRLensScanner(null)
+                    startScanning()
+                }
+                // 새 기기 등록 모드 2회 실패 → NOT_FOUND
+                isInNewDeviceMode && scanAttemptCount >= 2 -> {
+                    Log.w(TAG, "New device not found after 2 attempts")
+                    scanAttemptCount = 0
+                    isInNewDeviceMode = false
+                    _connectionState.value = RLensConnection.ConnectionState.NOT_FOUND
+                }
+                // 그 외 (1차 실패, 또는 최초 실행 1차 실패) → 재시도
+                else -> {
+                    Log.d(TAG, "Retrying scan...")
+                    startScanning()
+                }
             }
         }
     }
@@ -196,7 +263,11 @@ class ExerciseService : Service() {
         Log.d(TAG, "onStartCommand")
         // Acquire wake lock immediately when service starts foreground
         acquireWakeLock()
-        startForeground(NOTIFICATION_ID, createNotification())
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            startForeground(NOTIFICATION_ID, createNotification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_HEALTH)
+        } else {
+            startForeground(NOTIFICATION_ID, createNotification())
+        }
         return START_STICKY
     }
 
@@ -235,7 +306,11 @@ class ExerciseService : Service() {
 
         // Ensure foreground service is started (needed for auto-start from BLE callback)
         acquireWakeLock()
-        startForeground(NOTIFICATION_ID, createNotification())
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            startForeground(NOTIFICATION_ID, createNotification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_HEALTH)
+        } else {
+            startForeground(NOTIFICATION_ID, createNotification())
+        }
 
         runningEngine.reset()
         runningEngine.start()
@@ -364,17 +439,19 @@ class ExerciseService : Service() {
 
                 Log.d(TAG, "Metrics: HR=${currentMetrics.heartRate}, Pace=${currentMetrics.paceSecondsPerKm}, Time=${currentMetrics.elapsedSeconds}s")
 
-                // Send to rLens if connected
-                rLensConnection?.let { conn ->
-                    val connected = conn.isConnected()
-                    Log.d(TAG, "rLens connected: $connected")
-                    if (connected) {
-                        Log.d(TAG, "Calling sendMetrics...")
-                        conn.sendMetrics(currentMetrics)
-                    } else {
-                        Log.w(TAG, "rLens NOT connected, skipping send")
-                    }
-                } ?: Log.w(TAG, "rLensConnection is NULL")
+                // Send to rLens if connected (5초마다 전송 - 배터리 절감)
+                if (tickCount % 5 == 0) {
+                    rLensConnection?.let { conn ->
+                        val connected = conn.isConnected()
+                        Log.d(TAG, "rLens connected: $connected")
+                        if (connected) {
+                            Log.d(TAG, "Calling sendMetrics...")
+                            conn.sendMetrics(currentMetrics)
+                        } else {
+                            Log.w(TAG, "rLens NOT connected, skipping send")
+                        }
+                    } ?: Log.w(TAG, "rLensConnection is NULL")
+                }
 
                 // Save sample to DB (fire-and-forget, IO thread)
                 currentSessionId?.let { sessionId ->

@@ -60,6 +60,8 @@ class RunningEngine(context: Context? = null) {
 
     // Step tracking for stride learning
     private var lastStepCount: Long = 0
+    // True once Health Services STEPS deltas arrive; suppresses wall-clock step reconstruction
+    private var hasRealStepsData: Boolean = false
 
     companion object {
         // Average stride length in meters (running ~0.8m, walking ~0.7m)
@@ -169,13 +171,15 @@ class RunningEngine(context: Context? = null) {
         // Update stop detector with cadence
         stopDetector.updateCadence(spm)
 
-        // Estimate steps since last update
+        // Estimate steps since last update — only when real platform steps are unavailable.
+        // Once Health Services STEPS data arrives, wall-clock reconstruction is suppressed.
         val now = System.currentTimeMillis()
-        if (lastCadenceTime > 0 && isRunning && spm > 0) {
+        if (!hasRealStepsData && lastCadenceTime > 0 && isRunning && spm > 0) {
             val deltaSeconds = (now - lastCadenceTime) / 1000.0
             val stepsInPeriod = (spm * deltaSeconds / 60.0).toLong()
             totalSteps += stepsInPeriod
-
+        }
+        if (lastCadenceTime > 0 && isRunning) {
             // If no GPS distance, calculate from cadence using adaptive pace calculator
             if (!hasGpsDistance && !hasHealthServicesDistance) {
                 val estimatedDistance = totalSteps * strideLengthLearner.getStrideLength(spm)
@@ -238,6 +242,18 @@ class RunningEngine(context: Context? = null) {
     }
 
     /**
+     * Deliver real platform step deltas from Health Services DataType.STEPS.
+     * Calling this once switches off wall-clock cadence reconstruction for the session.
+     *
+     * @param steps Number of steps measured by the platform in the latest interval
+     */
+    fun updateStepsDelta(steps: Long) {
+        if (!isRunning || steps <= 0) return
+        hasRealStepsData = true
+        totalSteps += steps
+    }
+
+    /**
      * Update distance from Health Services with cadence and heart rate
      * This is the extended signature for full metric updates
      * Uses AdaptivePaceCalculator and StrideLengthLearner
@@ -254,9 +270,9 @@ class RunningEngine(context: Context? = null) {
         // Update stop detector with cadence
         stopDetector.updateCadence(cadenceSpm)
 
-        // Estimate steps since last update for stride learning
+        // Only accumulate synthetic steps when real platform steps have not yet arrived.
         val now = System.currentTimeMillis()
-        if (lastCadenceTime > 0 && isRunning && cadenceSpm > 0) {
+        if (!hasRealStepsData && lastCadenceTime > 0 && isRunning && cadenceSpm > 0) {
             val deltaSeconds = (now - lastCadenceTime) / 1000.0
             val stepsInPeriod = (cadenceSpm * deltaSeconds / 60.0).toLong()
             totalSteps += stepsInPeriod
@@ -320,6 +336,7 @@ class RunningEngine(context: Context? = null) {
         lastValidPace = 0
         lastValidPaceTime = 0
         lastStepCount = 0
+        hasRealStepsData = false
         // Reset calculators
         distanceCalculator.reset()
         speedCalculator.reset()

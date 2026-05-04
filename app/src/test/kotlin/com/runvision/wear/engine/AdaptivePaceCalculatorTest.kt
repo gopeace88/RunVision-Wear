@@ -76,6 +76,21 @@ class AdaptivePaceCalculatorTest {
     }
 
     @Test
+    fun `cadence mode returns non-zero pace after gps dropout`() {
+        // Simulate: GPS active, then dropout > 2s, but cadence stays at 180 spm.
+        // Before Fix 1 this would have returned 0 because noDistanceChange fired.
+        stopDetector.updateCadence(180)
+        stopDetector.updateDistanceChange()
+        calculator.updateWithGpsDistance(100.0, 30.0)
+
+        // GPS drops out — wait past the StopDetector 2s window
+        Thread.sleep(2100)
+
+        val pace = calculator.updateWithCadence(180)
+        assertTrue("Expected non-zero pace during GPS dropout, got $pace", pace > 0)
+    }
+
+    @Test
     fun `reset clears all state`() {
         stopDetector.updateCadence(170)
         stopDetector.updateDistanceChange()

@@ -49,6 +49,9 @@ class AdaptivePaceCalculator(
      */
     fun updateWithCadence(cadence: Int): Int {
         stopDetector.updateCadence(cadence)
+        // Cadence > 0 means the runner is moving — keep the distance-change clock alive
+        // so GPS dropout alone does not trigger the noDistanceChange stop condition.
+        if (cadence > 0) stopDetector.updateDistanceChange()
 
         if (stopDetector.isStopped()) return 0
 

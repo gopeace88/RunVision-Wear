@@ -15,12 +15,16 @@ import android.util.Log
  * Filters devices by name containing "rlens" (case-insensitive)
  * Also checks raw scan record bytes for device name (some devices advertise there)
  *
+ * If targetAddress is set, only connects to the saved device (MAC binding).
+ * This prevents connecting to a nearby stranger's rLens in group runs.
+ *
  * Reference: runvision-iq/source/RunVisionIQView.mc:778-801
  */
 @SuppressLint("MissingPermission")
 class RLensScanner(
     private val context: Context,
-    private val onDeviceFound: (BluetoothDevice) -> Unit
+    private val onDeviceFound: (BluetoothDevice) -> Unit,
+    private val targetAddress: String? = null
 ) {
     companion object {
         private const val TAG = "RLensScanner"
@@ -43,8 +47,12 @@ class RLensScanner(
             }?.lowercase() ?: ""
 
             // Filter: "rlens" only (case-insensitive)
-            if (deviceName.contains("rlens") ||
-                scanRecord.contains("rlens")) {
+            if (deviceName.contains("rlens") || scanRecord.contains("rlens")) {
+                // MAC binding: if a saved device exists, only connect to it
+                if (targetAddress != null && device.address != targetAddress) {
+                    Log.d(TAG, "Skipping ${device.name} (${device.address}) — not saved device")
+                    return
+                }
                 deviceFound = true
                 Log.d(TAG, "Found rLens device: ${device.name} (${device.address})")
                 stopScan()
@@ -73,7 +81,11 @@ class RLensScanner(
             .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
             .build()
 
-        Log.d(TAG, "Starting BLE scan...")
+        if (targetAddress != null) {
+            Log.d(TAG, "Starting BLE scan (target: $targetAddress)...")
+        } else {
+            Log.d(TAG, "Starting BLE scan (any rLens)...")
+        }
         deviceFound = false  // Reset for new scan
         isScanning = true
         scanner.startScan(null, settings, scanCallback)

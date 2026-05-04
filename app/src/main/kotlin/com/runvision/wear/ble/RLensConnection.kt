@@ -79,9 +79,9 @@ class RLensConnection(
                 if (exerciseCharacteristic != null) {
                     Log.d(TAG, "Exercise characteristic found")
 
-                    // Request HIGH priority connection to prevent OS from throttling BLE during screen off
-                    val priorityResult = gatt.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_HIGH)
-                    Log.d(TAG, "Requested CONNECTION_PRIORITY_HIGH: $priorityResult")
+                    // LOW_POWER: 100~500ms 간격 → 5초 전송 주기에서 rLens 라디오 절감 최대화
+                    val priorityResult = gatt.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_LOW_POWER)
+                    Log.d(TAG, "Requested CONNECTION_PRIORITY_LOW_POWER: $priorityResult")
 
                     onConnectionStateChanged(ConnectionState.CONNECTED)
                 } else {

@@ -34,6 +34,7 @@ class ExerciseManager(context: Context) {
     var onLocationUpdate: ((Double, Double, Long) -> Unit)? = null
     var onStepsUpdate: ((Int) -> Unit)? = null
     var onDistanceUpdate: ((Double) -> Unit)? = null  // Distance in meters
+    var onStepsDeltaUpdate: ((Long) -> Unit)? = null  // Real step deltas for stride learning
 
     // MeasureCallback for immediate heart rate (before exercise starts)
     private val measureCallback = object : MeasureCallback {
@@ -70,6 +71,13 @@ class ExerciseManager(context: Context) {
             update.latestMetrics.getData(DataType.STEPS_PER_MINUTE)?.lastOrNull()?.let {
                 Log.d(TAG, "Steps per minute: ${it.value}")
                 onStepsUpdate?.invoke(it.value.toInt())
+            }
+
+            // STEPS delivers real measured step deltas — used for accurate stride calibration.
+            // Unlike wall-clock reconstruction from cadence callbacks, these are platform-counted.
+            update.latestMetrics.getData(DataType.STEPS)?.lastOrNull()?.let {
+                Log.d(TAG, "Step delta: ${it.value}")
+                onStepsDeltaUpdate?.invoke(it.value)
             }
 
             // DISTANCE_TOTAL is a cumulative metric - use Health Services' sensor-fused distance
@@ -179,6 +187,10 @@ class ExerciseManager(context: Context) {
             if (DataType.DISTANCE_TOTAL in runningCapabilities.supportedDataTypes) {
                 dataTypes.add(DataType.DISTANCE_TOTAL)
                 Log.d(TAG, "Adding DISTANCE_TOTAL")
+            }
+            if (DataType.STEPS in runningCapabilities.supportedDataTypes) {
+                dataTypes.add(DataType.STEPS)
+                Log.d(TAG, "Adding STEPS")
             }
 
             Log.d(TAG, "Final data types to request: $dataTypes")

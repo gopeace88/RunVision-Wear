@@ -78,13 +78,15 @@ class StrideLengthLearner(private val context: Context? = null) {
     }
 
     /**
-     * Reset all learned data
-     * Note: Does NOT clear persisted storage. Call clearStorage() explicitly to remove persisted data.
+     * Reset session accumulators but keep the persisted calibration active.
+     * Use clearStorage() to wipe the user's learned stride across runs.
      */
     fun reset() {
-        learnedStrideLength = null
         gpsDistanceAccum = 0.0
         stepCountAccum = 0
+        // Reload persisted value so calibration survives workout resets within one process lifetime.
+        learnedStrideLength = null
+        loadFromStorage()
     }
 
     /**
