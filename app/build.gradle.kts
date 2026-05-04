@@ -22,8 +22,8 @@ android {
         applicationId = "com.runvision.runvision"
         minSdk = 30
         targetSdk = 34
-        versionCode = 17
-        versionName = "1.0.15"
+        versionCode = 21
+        versionName = "1.0.16"
     }
 
     signingConfigs {
