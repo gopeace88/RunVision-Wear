@@ -1,0 +1,25 @@
+{
+  "cli_version": "dev",
+  "checkpoint_id": "b6a671fcabe7",
+  "strategy": "manual-commit",
+  "branch": "feat/cycling-mode",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "docs/superpowers/specs/2026-05-16-cycling-mode-design.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/b6/a671fcabe7/0/metadata.json",
+      "transcript": "/b6/a671fcabe7/0/full.jsonl",
+      "content_hash": "/b6/a671fcabe7/0/content_hash.txt",
+      "prompt": "/b6/a671fcabe7/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 238,
+    "cache_creation_tokens": 393195,
+    "cache_read_tokens": 8998254,
+    "output_tokens": 149307,
+    "api_call_count": 100
+  }
+}
