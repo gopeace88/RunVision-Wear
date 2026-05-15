@@ -6,6 +6,7 @@
   "checkpoints_count": 1,
   "files_touched": [
     "app/src/main/kotlin/com/runvision/wear/MainActivity.kt",
+    "app/src/main/kotlin/com/runvision/wear/service/ExerciseService.kt",
     "app/src/main/kotlin/com/runvision/wear/ui/screens/HomeScreen.kt"
   ],
   "sessions": [
@@ -17,10 +18,10 @@
     }
   ],
   "token_usage": {
-    "input_tokens": 326,
-    "cache_creation_tokens": 871957,
-    "cache_read_tokens": 19936507,
-    "output_tokens": 284904,
-    "api_call_count": 143
+    "input_tokens": 332,
+    "cache_creation_tokens": 891861,
+    "cache_read_tokens": 20996189,
+    "output_tokens": 296500,
+    "api_call_count": 146
   }
 }
