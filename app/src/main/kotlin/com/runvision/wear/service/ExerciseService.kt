@@ -72,6 +72,9 @@ class ExerciseService : Service() {
         mode = m
     }
 
+    /** Current active mode (read-only). Used by MainActivity to pick the screen on re-entry. */
+    val activeMode: ExerciseMode get() = mode
+
     // Room Database
     private lateinit var workoutDatabase: WorkoutDatabase
     private lateinit var workoutDao: WorkoutDao

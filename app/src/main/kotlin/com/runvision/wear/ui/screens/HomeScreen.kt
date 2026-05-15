@@ -17,7 +17,8 @@ import com.runvision.wear.ble.RLensConnection
 @Composable
 fun HomeScreen(
     connectionState: RLensConnection.ConnectionState,
-    onStartClick: () -> Unit
+    onRunClick: () -> Unit,
+    onCycleClick: () -> Unit
 ) {
     val listState = rememberScalingLazyListState()
 
@@ -48,20 +49,18 @@ fun HomeScreen(
                 )
             }
 
-            item {
-                Spacer(modifier = Modifier.height(12.dp))
-            }
+            item { Spacer(modifier = Modifier.height(12.dp)) }
 
             item {
                 Button(
-                    onClick = onStartClick,
+                    onClick = onRunClick,
                     modifier = Modifier
-                        .fillMaxWidth(0.6f)
+                        .fillMaxWidth(0.7f)
                         .padding(horizontal = 8.dp),
                     colors = ButtonDefaults.primaryButtonColors()
                 ) {
                     Text(
-                        text = "START",
+                        text = "달리기",
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,
@@ -70,9 +69,27 @@ fun HomeScreen(
                 }
             }
 
+            item { Spacer(modifier = Modifier.height(8.dp)) }
+
             item {
-                Spacer(modifier = Modifier.height(12.dp))
+                Button(
+                    onClick = onCycleClick,
+                    modifier = Modifier
+                        .fillMaxWidth(0.7f)
+                        .padding(horizontal = 8.dp),
+                    colors = ButtonDefaults.secondaryButtonColors()
+                ) {
+                    Text(
+                        text = "자전거",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
             }
+
+            item { Spacer(modifier = Modifier.height(12.dp)) }
 
             item {
                 val (statusText, statusColor) = when (connectionState) {

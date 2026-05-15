@@ -25,8 +25,11 @@ import androidx.wear.compose.navigation.SwipeDismissableNavHost
 import androidx.wear.compose.navigation.composable
 import androidx.wear.compose.navigation.rememberSwipeDismissableNavController
 import com.runvision.wear.ble.RLensConnection
+import com.runvision.wear.data.CyclingMetrics
 import com.runvision.wear.data.RunningMetrics
+import com.runvision.wear.service.ExerciseMode
 import com.runvision.wear.service.ExerciseService
+import com.runvision.wear.ui.screens.CyclingScreen
 import com.runvision.wear.ui.screens.HomeScreen
 import com.runvision.wear.ui.screens.RunningScreen
 import com.runvision.wear.ui.theme.RunVisionWearTheme
@@ -54,6 +57,7 @@ class MainActivity : ComponentActivity() {
     // State for Compose UI (observed from Service)
     private val connectionState = mutableStateOf(RLensConnection.ConnectionState.DISCONNECTED)
     private val metrics = mutableStateOf(RunningMetrics())
+    private val cyclingMetrics = mutableStateOf(CyclingMetrics())
     private val isRunning = mutableStateOf(false)
     private val isPaused = mutableStateOf(false)
     private val isAmbient = mutableStateOf(false)
@@ -117,6 +121,13 @@ class MainActivity : ComponentActivity() {
                 lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
                     exerciseService?.metrics?.collect { m ->
                         metrics.value = m
+                    }
+                }
+            }
+            lifecycleScope.launch {
+                lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                    exerciseService?.cyclingMetrics?.collect { m ->
+                        cyclingMetrics.value = m
                     }
                 }
             }
@@ -196,8 +207,9 @@ class MainActivity : ComponentActivity() {
                         val currentRoute = nav.currentBackStackEntry?.destination?.route
                         Log.d(TAG, "LaunchedEffect: currentRoute=$currentRoute")
                         if (currentRoute == "home" || currentRoute == null) {
-                            Log.d(TAG, "Navigating to running screen (service already running)")
-                            nav.navigate("running") {
+                            val dest = if (exerciseService?.activeMode == ExerciseMode.CYCLING) "cycling" else "running"
+                            Log.d(TAG, "Navigating to $dest screen (service already running)")
+                            nav.navigate(dest) {
                                 popUpTo("home") { inclusive = false }
                             }
                         }
@@ -211,17 +223,28 @@ class MainActivity : ComponentActivity() {
                     composable("home") {
                         HomeScreen(
                             connectionState = connectionState.value,
-                            onStartClick = {
-                                // START button: Service handles scanning and auto-start
-                                Log.d(TAG, "START button pressed, starting scan via Service")
-
-                                // If already connected, start immediately
+                            onRunClick = {
+                                Log.d(TAG, "달리기 pressed, starting scan via Service")
+                                // Reset mode in case a prior cycling session left it CYCLING
+                                exerciseService?.setMode(ExerciseMode.RUNNING)
                                 if (connectionState.value == RLensConnection.ConnectionState.CONNECTED) {
                                     startRunning()
                                     nav.navigate("running")
                                 } else {
-                                    // Start foreground service first, then start scanning
-                                    // Auto-start will trigger on BLE connection
+                                    val intent = Intent(this@MainActivity, ExerciseService::class.java)
+                                    startForegroundService(intent)
+                                    exerciseService?.startScanning()
+                                }
+                            },
+                            onCycleClick = {
+                                Log.d(TAG, "자전거 pressed, starting scan via Service")
+                                // setMode MUST happen before scan/startExercise: the BLE
+                                // CONNECTED callback auto-calls startExercise() which reads mode.
+                                exerciseService?.setMode(ExerciseMode.CYCLING)
+                                if (connectionState.value == RLensConnection.ConnectionState.CONNECTED) {
+                                    startRunning()
+                                    nav.navigate("cycling")
+                                } else {
                                     val intent = Intent(this@MainActivity, ExerciseService::class.java)
                                     startForegroundService(intent)
                                     exerciseService?.startScanning()
@@ -230,7 +253,6 @@ class MainActivity : ComponentActivity() {
                         )
                     }
                     composable("running") {
-                        // Handle back button/swipe to stop exercise
                         BackHandler {
                             Log.d(TAG, "Back pressed in running screen, stopping exercise")
                             stopRunning()
@@ -239,6 +261,25 @@ class MainActivity : ComponentActivity() {
 
                         RunningScreen(
                             metrics = metrics.value,
+                            isAmbient = isAmbient.value,
+                            isPaused = isPaused.value,
+                            onPauseClick = { togglePause() },
+                            onStopClick = {
+                                stopRunning()
+                                nav.popBackStack()
+                            },
+                            onScreenTouch = { wakeUpScreen() }
+                        )
+                    }
+                    composable("cycling") {
+                        BackHandler {
+                            Log.d(TAG, "Back pressed in cycling screen, stopping exercise")
+                            stopRunning()
+                            nav.popBackStack()
+                        }
+
+                        CyclingScreen(
+                            metrics = cyclingMetrics.value,
                             isAmbient = isAmbient.value,
                             isPaused = isPaused.value,
                             onPauseClick = { togglePause() },
@@ -274,6 +315,7 @@ class MainActivity : ComponentActivity() {
             }
             // Immediately sync metrics to avoid showing stale data
             metrics.value = service.metrics.value
+            cyclingMetrics.value = service.cyclingMetrics.value
             Log.d(TAG, "onStart: synced metrics, time=${metrics.value.elapsedSeconds}s")
         }
     }
