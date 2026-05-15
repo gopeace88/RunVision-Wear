@@ -1,0 +1,26 @@
+{
+  "cli_version": "dev",
+  "checkpoint_id": "344feeab4219",
+  "strategy": "manual-commit",
+  "branch": "feat/cycling-mode",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "app/src/main/kotlin/com/runvision/wear/MainActivity.kt",
+    "app/src/main/kotlin/com/runvision/wear/ui/screens/HomeScreen.kt"
+  ],
+  "sessions": [
+    {
+      "metadata": "/34/4feeab4219/0/metadata.json",
+      "transcript": "/34/4feeab4219/0/full.jsonl",
+      "content_hash": "/34/4feeab4219/0/content_hash.txt",
+      "prompt": "/34/4feeab4219/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 326,
+    "cache_creation_tokens": 871957,
+    "cache_read_tokens": 19936507,
+    "output_tokens": 284904,
+    "api_call_count": 143
+  }
+}
