@@ -95,24 +95,30 @@ HomeScreen
 |---|---|---|
 | `ui/screens/HomeScreen.kt` | 자전거 버튼 1개. 기존 START(달리기) 그대로 | 없음 |
 | `MainActivity.kt` | `"cycling"` 라우트 + 자전거 버튼 핸들러 | 없음 (`"running"` 무변경) |
-| `health/ExerciseManager.kt` | `startExercise(type: ExerciseType = ExerciseType.RUNNING)` 파라미터화. 사이클 시 `ExerciseType.BIKING` | 기본값=RUNNING → 동일 |
-| `service/ExerciseService.kt` | (a) 모드 보관 (b) 콜백→엔진 디스패치 `if(CYCLING) cyclingEngine else runningEngine` (c) 전송 게이트 `N = if(CYCLING) 2 else 5` | 러닝 분기 바이트 동일 |
+| `health/ExerciseManager.kt` | (a) `startExercise(type: ExerciseType = ExerciseType.RUNNING)` 파라미터화, 사이클 시 `ExerciseType.BIKING` (b) **신규** `onAltitudeUpdate: ((Double)->Unit)?` 콜백 + 기존 LOCATION 블록에서 `location.value.altitude` 추출(기존 `onLocationUpdate` 라인 무변경) | 기본값=RUNNING, 신규 콜백 미참조 → 동일 |
+| `service/ExerciseService.kt` | (a) `setMode()`/모드 보관 (b) 콜백→엔진 디스패치 `if(CYCLING) cyclingEngine else runningEngine` (c) 전송 게이트 `N = if(CYCLING) 2 else 5` (d) `startExercise/pauseExercise/stopExercise` 모드 분기 | 러닝 분기 바이트 동일 |
+
+> **⚠ 모드 타이밍 (버그 표면):** `initializeBle()`가 onCreate에서 캡처한 람다는 BLE CONNECTED 시 `startExercise()`를 호출하고, `startExercise()`는 `mode`를 읽는다. 따라서 `setMode(CYCLING)`는 **스캔 시작 전**에 완료돼야 한다(스테일 스캔의 in-flight connect가 러닝 세션을 트리거하는 것 방지). 두 경로 모두 plan에서 명시적 단계로: ① cold: onCycleClick→`setMode`→`startForegroundService`→`startScanning`, ② already-CONNECTED: onCycleClick→`setMode`→`startExercise`→nav.
 | `data/db/WorkoutSession.kt` | 세션 생성 시 `exerciseType="CYCLING"` 기록 | 필드 이미 존재(기본 `"RUNNING"`), 스키마 무변경 |
 
 ### 3.3 신규 파일 (병렬 스택)
 
-- **`engine/CyclingEngine.kt`** — Health Services `BIKING` 콜백 소비. 산출: `elapsedSeconds`, `distanceMeters`, `speedKmh`(HS SPEED×3.6 우선, GPS 폴백), `altitudeM`(현재 GPS/기압 고도), `heartRate`. 페이스 스무더·스트라이드 러너·정지 감지 **없음**(러닝 전용). 30초 락·totalAscent **없음**(§2.3).
-- **`ble/CyclingPacketMapper.kt`** — `CyclingEngine` 산출 → 5개 패킷. `RLensProtocol` 함수 **무수정 재사용**:
-  - `createExerciseTimePacket(elapsedSeconds)` → `0x03`
-  - `createPacket(METRIC_VELOCITY, velocityScaled)` → `0x07` (§2.2)
-  - `createHeartRatePacket(heartRate)` → `0x0B`
-  - `createCadencePacket(altitudeM)` → `0x0E` (cadence 슬롯에 고도 m)
-  - `createDistancePacket(distanceMeters)` → `0x06`
-- **`ui/screens/CyclingScreen.kt`** — 2×2 + Ambient 변형(Wear 품질 가이드 준수, `RunningScreen` 레이아웃 미러). **워치 화면은 정직한 라벨**(슬롯 리매핑은 BLE 계층에만 적용): Speed(km/h) / Distance(km) / HR(bpm) / Altitude(m) + Elapsed. 일시정지/정지/탭-밝기 동작은 러닝 화면과 동일 UX.
+> **정정 (2026-05-16, 실코드 확인 후):** 최초 §3.3은 `ble/CyclingPacketMapper.kt`가 ByteArray 패킷을 생성한다고 했으나, `RLensConnection`은 `sendMetrics(RunningMetrics)` 단일 경로만 노출하며 내부에서 `createPacePacket(metrics.paceSecondsPerKm)`→`0x07`, `createCadencePacket(metrics.cadence)`→`0x0E` 식으로 슬롯을 채운다. 따라서 **자전거 값을 `RunningMetrics` 필드에 리매핑**해 **무수정 `sendMetrics`로 흘려보내면** 바이트가 iq와 정확히 일치한다. → `ble/CyclingPacketMapper.kt` 불필요, `RLensConnection.kt`·`RunningMetrics.kt` **진짜 diff 0**.
+
+- **`data/CyclingMetrics.kt`** — 워치 화면용 **정직한** 데이터 클래스: `elapsedSeconds`, `distanceMeters: Float`, `speedKmh: Float`, `heartRate: Int`, `altitudeM: Int` + 포매터(`elapsedFormatted`, `speedFormatted`(소수 1자리), `distanceKmFormatted`, `altitudeFormatted`). 순수 JVM 테스트 가능.
+- **`engine/CyclingEngine.kt`** — Health Services `BIKING` 콜백 소비(HR, GPS lat/lon/ts, HS distance m, altitude m). 산출 두 가지:
+  - `getCurrentMetrics(): CyclingMetrics` — 화면용 정직한 값. `speedKmh` = 재사용 `SpeedCalculator`(m/s)×3.6, distance = HS distance 우선·GPS(`DistanceCalculator`) 폴백, altitude/hr = 최신값, elapsed = `tick()`.
+  - `getRLensPayload(): RunningMetrics` — BLE/DB용 **리매핑** DTO: `paceSecondsPerKm = ((speedKmh*60.0)+0.5).toInt().coerceIn(0, Int.MAX_VALUE)` (§2.2), `cadence = altitudeM`, `heartRate = hr`, `distanceMeters = distanceM`, `elapsedSeconds = elapsed`.
+  - 메서드: `start/pause/resume/stop/tick/reset/isActive/updateHeartRate/updateGps/updateDistance/updateAltitude`. 페이스 스무더·스트라이드 러너·정지 감지·cadence·stepsDelta **없음**. 30초 락·totalAscent **없음**(§2.3).
+- **`service/ExerciseMode.kt`** — `enum class ExerciseMode { RUNNING, CYCLING }`.
+- **`ui/screens/CyclingScreen.kt`** — 2×2 + Ambient 변형(Wear 품질 가이드 준수, `RunningScreen` 레이아웃 미러), 인자 `CyclingMetrics`. **워치 화면은 정직한 라벨**(슬롯 리매핑은 BLE 계층에만): Speed(km/h) / Distance(km) / HR(bpm) / Altitude(m) + Elapsed. 일시정지/정지/탭-밝기 UX 동일. 아이콘은 기존 drawable 재사용(신규 리소스 없음).
 
 ### 3.4 미변경 파일 (러닝 핵심 = diff 0줄)
 
-`engine/RunningEngine.kt`, `engine/DistanceCalculator.kt`, `engine/SpeedCalculator.kt`, `engine/PaceCalculator.kt`, `engine/PaceSmoother.kt`, `engine/AdaptivePaceCalculator.kt`, `engine/StrideLengthLearner.kt`, `engine/StopDetector.kt`, `ble/RLensProtocol.kt`, `ble/RLensConnection.kt`, `ble/RLensScanner.kt`, `ui/screens/RunningScreen.kt`, `ui/components/MetricItem.kt`, `data/RunningMetrics.kt`.
+`engine/RunningEngine.kt`, `engine/DistanceCalculator.kt`, `engine/SpeedCalculator.kt`, `engine/PaceCalculator.kt`, `engine/PaceSmoother.kt`, `engine/AdaptivePaceCalculator.kt`, `engine/StrideLengthLearner.kt`, `engine/StopDetector.kt`, `ble/RLensProtocol.kt`, `ble/RLensConnection.kt`, `ble/RLensScanner.kt`, `ui/screens/RunningScreen.kt`, `ui/components/MetricItem.kt`, `data/RunningMetrics.kt`, `data/db/WorkoutSession.kt`.
+
+- `RLensConnection.kt`·`RunningMetrics.kt` diff 0 보장 메커니즘: 사이클은 `CyclingEngine.getRLensPayload()`가 만든 리매핑 `RunningMetrics`를 **기존 `sendMetrics`** 에 그대로 넘긴다. `SpeedCalculator`·`DistanceCalculator`·`MetricItem`은 read-only **재사용**(인스턴스화만, 수정 0).
+- **DB 의미 주의:** 리매핑 DTO를 그대로 `WorkoutSample`에 쓰면 `getAvgPace`가 avg(speed×60) 쓰레기값을 계산한다. 사이클 분기 DB 샘플은 `paceSecondsPerKm=0, cadence=0, heartRate=hr, distanceMeters=distanceM`로 기록(평균 pace/cadence 자연히 0). 세션 `exerciseType="CYCLING"`.
 
 ---
 
@@ -166,9 +172,11 @@ HomeScreen
 
 ---
 
-## 7. 미결 사항 (구현 단계 verify)
+## 7. 미결 사항 (실코드 확인 후 해소)
 
-- [ ] `RLensConnection`/`ExerciseService`의 러닝 elapsed/일시정지 전송 방식(`0x03` 패킷 vs Current Time characteristic) 실측 후, 사이클이 **동일 패턴**을 따르도록 적용. (설계 결정은 확정: 사이클 elapsed는 iq처럼 `0x03`. 구현 시 러닝과 같은 일시정지 처리 경로 재사용 확인)
-- [ ] Health Services `BIKING`에서 `SPEED` 데이터 타입 기기 가용성 — 미지원 기기는 GPS 델타 폴백(이미 설계에 포함, 폴백 우선순위만 구현 시 확정)
+- ✅ **elapsed/일시정지:** 러닝은 `sendMetrics`의 `createExerciseTimePacket(elapsed)`→`0x03` 사용(`RLensConnection.kt:165`), Current Time characteristic 미사용. 일시정지는 서비스 레벨(`exerciseManager.pause/resume` + `engine.pause/resume`). 사이클은 동일 패턴을 모드 분기로 재사용.
+- ✅ **속도 소스:** HS `SPEED` 의존 없음. 재사용 `SpeedCalculator`(GPS lat/lon/ts → m/s) ×3.6. `ExerciseManager`는 타입 파라미터화 + altitude 콜백만 추가.
+- **테스트 커버리지 정직성 (plan에 명시):** 자동 회귀 증거 = 순수 JVM 테스트(`CyclingMetrics`/`CyclingEngine`/`RLensProtocol`/기존 calculator) + git diff 0. `ExerciseService`/`ExerciseManager`/`MainActivity`/스크린은 **기존 유닛 테스트 없음** → §5.4 실기기 검증으로만 회귀 확인.
+- **베이스라인 (2026-05-16):** `./gradlew :app:testDebugUnitTest` = 90 tests, 0 fail. 모든 신규 작업은 이 그린 베이스라인 위에서 진행.
 
 ---
