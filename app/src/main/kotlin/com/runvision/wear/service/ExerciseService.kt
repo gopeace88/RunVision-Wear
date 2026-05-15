@@ -25,6 +25,8 @@ import com.runvision.wear.data.db.WorkoutDatabase
 import com.runvision.wear.data.db.WorkoutDao
 import com.runvision.wear.data.db.WorkoutSession
 import com.runvision.wear.data.db.WorkoutSample
+import com.runvision.wear.data.CyclingMetrics
+import com.runvision.wear.engine.CyclingEngine
 import com.runvision.wear.engine.RunningEngine
 import com.runvision.wear.health.ExerciseManager
 import kotlinx.coroutines.*
@@ -58,7 +60,17 @@ class ExerciseService : Service() {
     private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
     private lateinit var runningEngine: RunningEngine
+    private lateinit var cyclingEngine: CyclingEngine
     private lateinit var exerciseManager: ExerciseManager
+
+    // @Volatile: setMode() runs on main thread; mode is read in startExercise()
+    // which is auto-invoked from the BLE GATT callback (binder thread).
+    @Volatile private var mode: ExerciseMode = ExerciseMode.RUNNING
+
+    fun setMode(m: ExerciseMode) {
+        Log.d(TAG, "setMode: $m")
+        mode = m
+    }
 
     // Room Database
     private lateinit var workoutDatabase: WorkoutDatabase
@@ -89,6 +101,9 @@ class ExerciseService : Service() {
     private val _metrics = MutableStateFlow(RunningMetrics())
     val metrics: StateFlow<RunningMetrics> = _metrics
 
+    private val _cyclingMetrics = MutableStateFlow(CyclingMetrics())
+    val cyclingMetrics: StateFlow<CyclingMetrics> = _cyclingMetrics
+
     private val _isRunning = MutableStateFlow(false)
     val isRunning: StateFlow<Boolean> = _isRunning
 
@@ -106,6 +121,7 @@ class ExerciseService : Service() {
         Log.d(TAG, "ExerciseService created")
 
         runningEngine = RunningEngine(this)
+        cyclingEngine = CyclingEngine()
 
         // Initialize Room Database
         workoutDatabase = WorkoutDatabase.getInstance(this)
@@ -114,25 +130,48 @@ class ExerciseService : Service() {
         exerciseManager = ExerciseManager(this).apply {
             onHeartRateUpdate = { hr ->
                 Log.d(TAG, "HR update: $hr")
-                runningEngine.updateHeartRate(hr)
-                // Update metrics immediately for UI
-                _metrics.value = _metrics.value.copy(heartRate = hr)
+                if (mode == ExerciseMode.CYCLING) {
+                    cyclingEngine.updateHeartRate(hr)
+                    // Immediate UI update — parity with running path's low-latency HR
+                    _cyclingMetrics.value = _cyclingMetrics.value.copy(heartRate = hr)
+                } else {
+                    runningEngine.updateHeartRate(hr)
+                    // Update metrics immediately for UI
+                    _metrics.value = _metrics.value.copy(heartRate = hr)
+                }
             }
             onLocationUpdate = { lat, lon, timestamp ->
                 Log.d(TAG, "GPS update: $lat, $lon")
-                runningEngine.updateGps(lat, lon, timestamp)
+                if (mode == ExerciseMode.CYCLING) {
+                    cyclingEngine.updateGps(lat, lon, timestamp)
+                } else {
+                    runningEngine.updateGps(lat, lon, timestamp)
+                }
             }
             onStepsUpdate = { steps ->
                 Log.d(TAG, "Cadence update: $steps")
-                runningEngine.updateCadence(steps)
+                if (mode != ExerciseMode.CYCLING) {
+                    runningEngine.updateCadence(steps)
+                }
             }
             onDistanceUpdate = { meters ->
                 Log.d(TAG, "Distance update: $meters m")
-                runningEngine.updateDistance(meters)
+                if (mode == ExerciseMode.CYCLING) {
+                    cyclingEngine.updateDistance(meters)
+                } else {
+                    runningEngine.updateDistance(meters)
+                }
             }
             onStepsDeltaUpdate = { steps ->
                 Log.d(TAG, "Step delta: $steps")
-                runningEngine.updateStepsDelta(steps)
+                if (mode != ExerciseMode.CYCLING) {
+                    runningEngine.updateStepsDelta(steps)
+                }
+            }
+            onAltitudeUpdate = { meters ->
+                if (mode == ExerciseMode.CYCLING) {
+                    cyclingEngine.updateAltitude(meters)
+                }
             }
         }
 
@@ -312,25 +351,32 @@ class ExerciseService : Service() {
             startForeground(NOTIFICATION_ID, createNotification())
         }
 
-        runningEngine.reset()
-        runningEngine.start()
+        if (mode == ExerciseMode.CYCLING) {
+            cyclingEngine.reset()
+            cyclingEngine.start()
+        } else {
+            runningEngine.reset()
+            runningEngine.start()
+        }
         _isRunning.value = true
 
         // Create new workout session in DB
         currentSessionId = UUID.randomUUID().toString()
+        val sessionType = if (mode == ExerciseMode.CYCLING) "CYCLING" else "RUNNING"
         serviceScope.launch(Dispatchers.IO) {
             workoutDao.insertSession(
                 WorkoutSession(
                     sessionId = currentSessionId!!,
-                    startTime = System.currentTimeMillis()
+                    startTime = System.currentTimeMillis(),
+                    exerciseType = sessionType
                 )
             )
-            Log.d(TAG, "Created workout session: $currentSessionId")
+            Log.d(TAG, "Created workout session: $currentSessionId ($sessionType)")
         }
 
         // Start Health Services
         serviceScope.launch {
-            exerciseManager.startExercise()
+            exerciseManager.startExercise(mode.toExerciseType())
         }
 
         // Start 1Hz timer
@@ -342,14 +388,16 @@ class ExerciseService : Service() {
      */
     fun pauseExercise() {
         serviceScope.launch {
-            if (runningEngine.isActive()) {
+            val engineActive =
+                if (mode == ExerciseMode.CYCLING) cyclingEngine.isActive() else runningEngine.isActive()
+            if (engineActive) {
                 Log.d(TAG, "Pausing exercise")
-                runningEngine.pause()
+                if (mode == ExerciseMode.CYCLING) cyclingEngine.pause() else runningEngine.pause()
                 exerciseManager.pauseExercise()
                 _isPaused.value = true
             } else {
                 Log.d(TAG, "Resuming exercise")
-                runningEngine.resume()
+                if (mode == ExerciseMode.CYCLING) cyclingEngine.resume() else runningEngine.resume()
                 exerciseManager.resumeExercise()
                 _isPaused.value = false
             }
@@ -361,8 +409,12 @@ class ExerciseService : Service() {
      */
     fun stopExercise() {
         Log.d(TAG, "Stopping exercise from service")
-        val finalMetrics = runningEngine.getCurrentMetrics()
-        runningEngine.stop()
+        val finalMetrics = if (mode == ExerciseMode.CYCLING) {
+            cyclingEngine.getRLensPayload()  // remapped RunningMetrics: distance+elapsed valid for session summary
+        } else {
+            runningEngine.getCurrentMetrics()
+        }
+        if (mode == ExerciseMode.CYCLING) cyclingEngine.stop() else runningEngine.stop()
         _isRunning.value = false
         _isPaused.value = false
         timerJob?.cancel()
@@ -433,46 +485,84 @@ class ExerciseService : Service() {
                 Log.d(TAG, "=== TICK $tickCount ===")
                 Log.d(TAG, "WakeLock held: ${wakeLock?.isHeld}")
 
-                runningEngine.tick()
-                val currentMetrics = runningEngine.getCurrentMetrics()
-                _metrics.value = currentMetrics
+                if (mode == ExerciseMode.CYCLING) {
+                    cyclingEngine.tick()
+                    val honest = cyclingEngine.getCurrentMetrics()
+                    _cyclingMetrics.value = honest
+                    val payload = cyclingEngine.getRLensPayload()
 
-                Log.d(TAG, "Metrics: HR=${currentMetrics.heartRate}, Pace=${currentMetrics.paceSecondsPerKm}, Time=${currentMetrics.elapsedSeconds}s")
+                    Log.d(TAG, "Cycling: speed=${honest.speedKmh}km/h, alt=${honest.altitudeM}m, HR=${honest.heartRate}, Time=${honest.elapsedSeconds}s")
 
-                // Send to rLens if connected (5초마다 전송 - 배터리 절감)
-                if (tickCount % 5 == 0) {
-                    rLensConnection?.let { conn ->
-                        val connected = conn.isConnected()
-                        Log.d(TAG, "rLens connected: $connected")
-                        if (connected) {
-                            Log.d(TAG, "Calling sendMetrics...")
-                            conn.sendMetrics(currentMetrics)
-                        } else {
-                            Log.w(TAG, "rLens NOT connected, skipping send")
-                        }
-                    } ?: Log.w(TAG, "rLensConnection is NULL")
-                }
-
-                // Save sample to DB (fire-and-forget, IO thread)
-                currentSessionId?.let { sessionId ->
-                    launch(Dispatchers.IO) {
-                        workoutDao.insertSample(
-                            WorkoutSample(
-                                sessionId = sessionId,
-                                timestamp = System.currentTimeMillis(),
-                                heartRate = currentMetrics.heartRate,
-                                paceSecondsPerKm = currentMetrics.paceSecondsPerKm,
-                                cadence = currentMetrics.cadence,
-                                distanceMeters = currentMetrics.distanceMeters,
-                                latitude = currentMetrics.latitude,
-                                longitude = currentMetrics.longitude
-                            )
-                        )
+                    // Cycling sends every 2s (runvision-iq CyclingStrategy interval; fast speed changes)
+                    if (tickCount % 2 == 0) {
+                        rLensConnection?.let { conn ->
+                            if (conn.isConnected()) conn.sendMetrics(payload)
+                            else Log.w(TAG, "rLens NOT connected, skipping send")
+                        } ?: Log.w(TAG, "rLensConnection is NULL")
                     }
-                }
 
-                // Update notification with current metrics
-                updateNotification(currentMetrics)
+                    // DB sample: store honest cycling values. pace/cadence = 0 so
+                    // getAvgPace/getAvgCadence don't compute avg(speed×60)/avg(altitude) garbage.
+                    currentSessionId?.let { sessionId ->
+                        launch(Dispatchers.IO) {
+                            workoutDao.insertSample(
+                                WorkoutSample(
+                                    sessionId = sessionId,
+                                    timestamp = System.currentTimeMillis(),
+                                    heartRate = honest.heartRate,
+                                    paceSecondsPerKm = 0,
+                                    cadence = 0,
+                                    distanceMeters = honest.distanceMeters,
+                                    latitude = payload.latitude,
+                                    longitude = payload.longitude
+                                )
+                            )
+                        }
+                    }
+
+                    updateNotification(payload)
+                } else {
+                    runningEngine.tick()
+                    val currentMetrics = runningEngine.getCurrentMetrics()
+                    _metrics.value = currentMetrics
+
+                    Log.d(TAG, "Metrics: HR=${currentMetrics.heartRate}, Pace=${currentMetrics.paceSecondsPerKm}, Time=${currentMetrics.elapsedSeconds}s")
+
+                    // Send to rLens if connected (5초마다 전송 - 배터리 절감)
+                    if (tickCount % 5 == 0) {
+                        rLensConnection?.let { conn ->
+                            val connected = conn.isConnected()
+                            Log.d(TAG, "rLens connected: $connected")
+                            if (connected) {
+                                Log.d(TAG, "Calling sendMetrics...")
+                                conn.sendMetrics(currentMetrics)
+                            } else {
+                                Log.w(TAG, "rLens NOT connected, skipping send")
+                            }
+                        } ?: Log.w(TAG, "rLensConnection is NULL")
+                    }
+
+                    // Save sample to DB (fire-and-forget, IO thread)
+                    currentSessionId?.let { sessionId ->
+                        launch(Dispatchers.IO) {
+                            workoutDao.insertSample(
+                                WorkoutSample(
+                                    sessionId = sessionId,
+                                    timestamp = System.currentTimeMillis(),
+                                    heartRate = currentMetrics.heartRate,
+                                    paceSecondsPerKm = currentMetrics.paceSecondsPerKm,
+                                    cadence = currentMetrics.cadence,
+                                    distanceMeters = currentMetrics.distanceMeters,
+                                    latitude = currentMetrics.latitude,
+                                    longitude = currentMetrics.longitude
+                                )
+                            )
+                        }
+                    }
+
+                    // Update notification with current metrics
+                    updateNotification(currentMetrics)
+                }
             }
             Log.w(TAG, "Timer loop EXITED! isActive=$isActive")
         }
