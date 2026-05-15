@@ -35,6 +35,7 @@ class ExerciseManager(context: Context) {
     var onStepsUpdate: ((Int) -> Unit)? = null
     var onDistanceUpdate: ((Double) -> Unit)? = null  // Distance in meters
     var onStepsDeltaUpdate: ((Long) -> Unit)? = null  // Real step deltas for stride learning
+    var onAltitudeUpdate: ((Double) -> Unit)? = null  // Current altitude — cycling only; running callers do not set this callback
 
     // MeasureCallback for immediate heart rate (before exercise starts)
     private val measureCallback = object : MeasureCallback {
@@ -66,6 +67,13 @@ class ExerciseManager(context: Context) {
                     location.value.longitude,
                     System.currentTimeMillis()
                 )
+                // Cycling altitude. SDK sentinel for "no altitude" is a non-physical
+                // value (e.g. Double.MAX_VALUE); a finite plausible-range check is
+                // robust across health-services-client versions (constant name varies).
+                val alt = location.value.altitude
+                if (alt.isFinite() && alt > -1000.0 && alt < 10000.0) {
+                    onAltitudeUpdate?.invoke(alt)
+                }
             }
 
             update.latestMetrics.getData(DataType.STEPS_PER_MINUTE)?.lastOrNull()?.let {
@@ -142,9 +150,10 @@ class ExerciseManager(context: Context) {
     }
 
     /**
-     * Start running exercise session
+     * Start exercise session.
+     * @param exerciseType RUNNING (default — running path byte-identical) or BIKING.
      */
-    suspend fun startExercise() {
+    suspend fun startExercise(exerciseType: ExerciseType = ExerciseType.RUNNING) {
         try {
             Log.d(TAG, "Starting exercise...")
 
@@ -167,8 +176,8 @@ class ExerciseManager(context: Context) {
             }
 
             val capabilities = exerciseClient.getCapabilitiesAsync().await()
-            val runningCapabilities = capabilities.getExerciseTypeCapabilities(ExerciseType.RUNNING)
-            Log.d(TAG, "Supported data types: ${runningCapabilities.supportedDataTypes}")
+            val runningCapabilities = capabilities.getExerciseTypeCapabilities(exerciseType)
+            Log.d(TAG, "Supported data types ($exerciseType): ${runningCapabilities.supportedDataTypes}")
 
             val dataTypes = mutableSetOf<DataType<*, *>>()
 
@@ -195,7 +204,7 @@ class ExerciseManager(context: Context) {
 
             Log.d(TAG, "Final data types to request: $dataTypes")
 
-            val config = ExerciseConfig.builder(ExerciseType.RUNNING)
+            val config = ExerciseConfig.builder(exerciseType)
                 .setDataTypes(dataTypes)
                 .setIsAutoPauseAndResumeEnabled(false)
                 .setIsGpsEnabled(true)  // Required for LOCATION data
