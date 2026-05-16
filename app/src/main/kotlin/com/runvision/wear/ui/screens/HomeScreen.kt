@@ -17,6 +17,8 @@ import com.runvision.wear.ble.RLensConnection
 @Composable
 fun HomeScreen(
     connectionState: RLensConnection.ConnectionState,
+    cyclingSupported: Boolean = true,
+    cyclingStartFailed: Boolean = false,
     onRunClick: () -> Unit,
     onCycleClick: () -> Unit
 ) {
@@ -74,6 +76,7 @@ fun HomeScreen(
             item {
                 Button(
                     onClick = onCycleClick,
+                    enabled = cyclingSupported,
                     modifier = Modifier
                         .fillMaxWidth(0.7f)
                         .padding(horizontal = 8.dp),
@@ -92,13 +95,17 @@ fun HomeScreen(
             item { Spacer(modifier = Modifier.height(12.dp)) }
 
             item {
-                val (statusText, statusColor) = when (connectionState) {
-                    RLensConnection.ConnectionState.CONNECTED -> "Connected" to Color(0xFF4CAF50)
-                    RLensConnection.ConnectionState.CONNECTING -> "Connecting.." to Color(0xFFFF9800)
-                    RLensConnection.ConnectionState.RECONNECTING -> "Reconnecting.." to Color(0xFFFF9800)
-                    RLensConnection.ConnectionState.SCANNING -> "Scanning.." to Color(0xFF2196F3)
-                    RLensConnection.ConnectionState.NOT_FOUND -> "Not Found" to Color(0xFFF44336)
-                    RLensConnection.ConnectionState.DISCONNECTED -> "READY" to Color.Gray
+                val (statusText, statusColor) = when (cyclingHomeOverride(cyclingSupported, cyclingStartFailed)) {
+                    HomeOverride.UNSUPPORTED -> "자전거 미지원" to Color.Gray
+                    HomeOverride.START_FAILED -> "자전거 시작 실패" to Color(0xFFF44336)
+                    null -> when (connectionState) {
+                        RLensConnection.ConnectionState.CONNECTED -> "Connected" to Color(0xFF4CAF50)
+                        RLensConnection.ConnectionState.CONNECTING -> "Connecting.." to Color(0xFFFF9800)
+                        RLensConnection.ConnectionState.RECONNECTING -> "Reconnecting.." to Color(0xFFFF9800)
+                        RLensConnection.ConnectionState.SCANNING -> "Scanning.." to Color(0xFF2196F3)
+                        RLensConnection.ConnectionState.NOT_FOUND -> "Not Found" to Color(0xFFF44336)
+                        RLensConnection.ConnectionState.DISCONNECTED -> "READY" to Color.Gray
+                    }
                 }
                 Text(
                     text = statusText,

@@ -58,6 +58,8 @@ class MainActivity : ComponentActivity() {
     private val connectionState = mutableStateOf(RLensConnection.ConnectionState.DISCONNECTED)
     private val metrics = mutableStateOf(RunningMetrics())
     private val cyclingMetrics = mutableStateOf(CyclingMetrics())
+    private val cyclingSupported = mutableStateOf(true)
+    private val cyclingStartFailed = mutableStateOf(false)
     private val isRunning = mutableStateOf(false)
     private val isPaused = mutableStateOf(false)
     private val isAmbient = mutableStateOf(false)
@@ -128,6 +130,20 @@ class MainActivity : ComponentActivity() {
                 lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
                     exerciseService?.cyclingMetrics?.collect { m ->
                         cyclingMetrics.value = m
+                    }
+                }
+            }
+            lifecycleScope.launch {
+                lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                    exerciseService?.cyclingSupported?.collect { s ->
+                        cyclingSupported.value = s
+                    }
+                }
+            }
+            lifecycleScope.launch {
+                lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                    exerciseService?.cyclingStartFailed?.collect { f ->
+                        cyclingStartFailed.value = f
                     }
                 }
             }
@@ -223,6 +239,8 @@ class MainActivity : ComponentActivity() {
                     composable("home") {
                         HomeScreen(
                             connectionState = connectionState.value,
+                            cyclingSupported = cyclingSupported.value,
+                            cyclingStartFailed = cyclingStartFailed.value,
                             onRunClick = {
                                 Log.d(TAG, "달리기 pressed, starting scan via Service")
                                 // Reset mode in case a prior cycling session left it CYCLING
@@ -245,9 +263,13 @@ class MainActivity : ComponentActivity() {
                                     startRunning()
                                     nav.navigate("cycling")
                                 } else {
+                                    // F2: deliver mode + scan command durably via Intent
+                                    // (binder may be null pre-bind). onStartCommand owns
+                                    // the single scan trigger to avoid double-scan.
                                     val intent = Intent(this@MainActivity, ExerciseService::class.java)
+                                        .putExtra(ExerciseService.EXTRA_MODE, ExerciseMode.CYCLING.name)
+                                        .putExtra(ExerciseService.EXTRA_CMD, ExerciseService.CMD_START_SCAN)
                                     startForegroundService(intent)
-                                    exerciseService?.startScanning()
                                 }
                             }
                         )
@@ -316,6 +338,8 @@ class MainActivity : ComponentActivity() {
             // Immediately sync metrics to avoid showing stale data
             metrics.value = service.metrics.value
             cyclingMetrics.value = service.cyclingMetrics.value
+            cyclingSupported.value = service.cyclingSupported.value
+            cyclingStartFailed.value = service.cyclingStartFailed.value
             Log.d(TAG, "onStart: synced metrics, time=${metrics.value.elapsedSeconds}s")
         }
     }

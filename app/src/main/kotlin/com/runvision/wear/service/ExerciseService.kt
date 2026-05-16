@@ -469,6 +469,9 @@ class ExerciseService : Service() {
      */
     fun stopExercise() {
         Log.d(TAG, "Stopping exercise from service")
+        // Clear any cycling start-failure banner so it doesn't persist on Home
+        // after the user backs out of a failed cycling attempt.
+        _cyclingStartFailed.value = false
         val finalMetrics = if (mode == ExerciseMode.CYCLING) {
             cyclingEngine.getRLensPayload()  // remapped RunningMetrics: distance+elapsed valid for session summary
         } else {
