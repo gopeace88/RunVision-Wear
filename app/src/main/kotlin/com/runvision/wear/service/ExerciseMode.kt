@@ -14,3 +14,11 @@ fun ExerciseMode.toExerciseType(): ExerciseType =
         ExerciseMode.RUNNING -> ExerciseType.RUNNING
         ExerciseMode.CYCLING -> ExerciseType.BIKING
     }
+
+/**
+ * Safe parse for the Intent EXTRA_MODE string. Unknown/null → RUNNING so a
+ * malformed or absent command can never accidentally select cycling.
+ * Case-sensitive: only exact enum names ("RUNNING"/"CYCLING") match.
+ */
+fun parseExerciseMode(name: String?): ExerciseMode =
+    ExerciseMode.values().firstOrNull { it.name == name } ?: ExerciseMode.RUNNING
