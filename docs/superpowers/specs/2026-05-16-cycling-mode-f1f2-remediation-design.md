@@ -170,5 +170,13 @@ homeStatus(cyclingSupported, cyclingStartFailed, connectionState) -> (text, colo
 
 - ✅ F1 범위 = C(사전+런타임). F1 실패 표면 = HomeScreen 상태 텍스트(보호 enum 미사용, 별도 StateFlow). F2 = Intent 커맨드 경로.
 - 구현 시 확인: `ExerciseCapabilities.supportedExerciseTypes` API 명칭(컴파일/javap 검증, 추측 금지). 미확인 시 BLOCKED 보고.
+- ✅ 구현 완료(커밋 e6035ab→9c8652d). 최종 holistic 리뷰: **READY TO MERGE**. Codex F1·F2 구조적 해결, 러닝 18 보호파일 diff-0(정밀 base 965b533/acebd8b), TOCTOU 폐쇄, 실패→뒤로 경로 `CyclingEngine` no-op-safe 검증.
+
+## 7. 알려진 한계 (최종 holistic 리뷰 후 수용 — 사용자 결정 2026-05-16)
+
+비회귀(러닝 무영향)·F1 안전불변(유령 세션 없음) 유지. 사이클 *실패 UX*만의 잔여 공백. 수용·문서화 후 Phase-next 후보로 둔다(이번 브랜치 미수정).
+
+- **L1 (구 Minor#1):** rLens가 *이미 연결된* 상태에서 자전거 탭 시 `MainActivity.onCycleClick` CONNECTED 빠른길은 `startRunning()`+`nav.navigate("cycling")`을 동기 실행 → 이후 HS BIKING이 *일시 실패*하면 사용자는 0값 CyclingScreen에 있고, 스펙 §3.2의 "자전거 시작 실패" 배너(Home 위치)가 그 경로에선 미표출. 뒤로가기 시 `stopExercise()`가 `_cyclingStartFailed`를 클리어해 흔적 없음. 발생 조건이 *BIKING 지원 기기 + 일시 실패 + 이미 연결* 3중으로 좁고, **유령 세션·러닝 영향 없음**. 제대로 된 수정 = 연결-빠른길 네비게이션을 비동기 HS 결과에 게이트하는 설계 변경(별도 brainstorm→spec→plan 규모) → Phase-next.
+- **L2 (구 Minor#2):** 사이클 실패 후 달리기 탭 시 스캔 윈도 동안 "자전거 시작 실패" 배너가 잠깐 잔존(다음 `stopExercise`에 자동 해소). 순수 cosmetic·일시적. 러닝 경로에 상태 write 추가는 byte-identical 리스크라 의도적 미수정.
 
 ---
