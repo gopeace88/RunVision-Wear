@@ -150,10 +150,26 @@ class ExerciseManager(context: Context) {
     }
 
     /**
+     * Whether Health Services on this device supports the given exercise type.
+     * Optimistic on query failure (returns true) so the runtime start gate
+     * remains the backstop rather than false-disabling on a transient error.
+     */
+    suspend fun isExerciseTypeSupported(exerciseType: ExerciseType): Boolean {
+        return try {
+            exerciseType in exerciseClient.getCapabilitiesAsync().await().supportedExerciseTypes
+        } catch (e: Exception) {
+            Log.e(TAG, "Capability query failed for $exerciseType: ${e.message}", e)
+            true
+        }
+    }
+
+    /**
      * Start exercise session.
      * @param exerciseType RUNNING (default — running path byte-identical) or BIKING.
+     * @return true if Health Services accepted the session start, false on failure.
+     *         Running callers ignore the return value (behaviour unchanged).
      */
-    suspend fun startExercise(exerciseType: ExerciseType = ExerciseType.RUNNING) {
+    suspend fun startExercise(exerciseType: ExerciseType = ExerciseType.RUNNING): Boolean {
         try {
             Log.d(TAG, "Starting exercise...")
 
@@ -216,9 +232,11 @@ class ExerciseManager(context: Context) {
 
             exerciseClient.startExerciseAsync(config).await()
             Log.d(TAG, "Exercise started successfully!")
+            return true
 
         } catch (e: Exception) {
             Log.e(TAG, "Failed to start exercise: ${e.message}", e)
+            return false
         }
     }
 
