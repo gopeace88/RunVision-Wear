@@ -54,6 +54,11 @@ class ExerciseService : Service() {
         // MAC binding: prevents connecting to a nearby stranger's rLens
         const val PREFS_NAME = "runvision_prefs"
         const val KEY_RLENS_ADDRESS = "rlens_mac_address"
+
+        // F2: durable mode/start command via startForegroundService Intent
+        const val EXTRA_MODE = "extra_mode"          // ExerciseMode.name
+        const val EXTRA_CMD = "extra_cmd"
+        const val CMD_START_SCAN = "cmd_start_scan"
     }
 
     private val binder = LocalBinder()
@@ -106,6 +111,12 @@ class ExerciseService : Service() {
 
     private val _cyclingMetrics = MutableStateFlow(CyclingMetrics())
     val cyclingMetrics: StateFlow<CyclingMetrics> = _cyclingMetrics
+
+    // F1: capability (false = device has no BIKING support) + runtime start failure
+    private val _cyclingSupported = MutableStateFlow(true)
+    val cyclingSupported: StateFlow<Boolean> = _cyclingSupported
+    private val _cyclingStartFailed = MutableStateFlow(false)
+    val cyclingStartFailed: StateFlow<Boolean> = _cyclingStartFailed
 
     private val _isRunning = MutableStateFlow(false)
     val isRunning: StateFlow<Boolean> = _isRunning
@@ -186,6 +197,13 @@ class ExerciseService : Service() {
         // Start immediate heart rate measurement (before exercise starts)
         serviceScope.launch {
             exerciseManager.startMeasuringHeartRate()
+        }
+
+        // F1 pre-flight: query once whether this device supports BIKING.
+        // Default stays true until known, so the runtime gate is the backstop.
+        serviceScope.launch {
+            _cyclingSupported.value =
+                exerciseManager.isExerciseTypeSupported(ExerciseMode.CYCLING.toExerciseType())
         }
     }
 
@@ -310,6 +328,17 @@ class ExerciseService : Service() {
         } else {
             startForeground(NOTIFICATION_ID, createNotification())
         }
+
+        // F2: durable mode/start delivered via Intent (survives the pre-bind window).
+        // Absent extras (running path & every existing caller) → no-op → byte-identical.
+        intent?.getStringExtra(EXTRA_MODE)?.let { setMode(parseExerciseMode(it)) }
+        if (intent?.getStringExtra(EXTRA_CMD) == CMD_START_SCAN &&
+            (_connectionState.value == RLensConnection.ConnectionState.DISCONNECTED ||
+                _connectionState.value == RLensConnection.ConnectionState.NOT_FOUND)) {
+            Log.d(TAG, "onStartCommand: CMD_START_SCAN")
+            startScanning()
+        }
+
         return START_STICKY
     }
 
@@ -355,35 +384,63 @@ class ExerciseService : Service() {
         }
 
         if (mode == ExerciseMode.CYCLING) {
-            cyclingEngine.reset()
-            cyclingEngine.start()
+            // F1: gate session/UI/timer on a successful Health Services BIKING start.
+            _cyclingStartFailed.value = false
+            serviceScope.launch {
+                // Cycling branch is BIKING by definition — use the constant, not the
+                // @Volatile `mode`, so a concurrent setMode() can't race the HS start.
+                val ok = exerciseManager.startExercise(ExerciseMode.CYCLING.toExerciseType())
+                if (ok) {
+                    cyclingEngine.reset()
+                    cyclingEngine.start()
+                    _isRunning.value = true
+                    currentSessionId = UUID.randomUUID().toString()
+                    serviceScope.launch(Dispatchers.IO) {
+                        workoutDao.insertSession(
+                            WorkoutSession(
+                                sessionId = currentSessionId!!,
+                                startTime = System.currentTimeMillis(),
+                                exerciseType = "CYCLING"
+                            )
+                        )
+                        Log.d(TAG, "Created workout session: $currentSessionId (CYCLING)")
+                    }
+                    startTimer()
+                } else {
+                    Log.w(TAG, "Cycling start failed: BIKING unsupported or HS error")
+                    _cyclingStartFailed.value = true
+                    // _isRunning stays false; no session row, no timer → no ghost session.
+                    // Service is left foreground/idle; user retries or backs out
+                    // (BackHandler → stopExercise) per spec §3.2.
+                }
+            }
         } else {
             runningEngine.reset()
             runningEngine.start()
-        }
-        _isRunning.value = true
+            _isRunning.value = true
 
-        // Create new workout session in DB
-        currentSessionId = UUID.randomUUID().toString()
-        val sessionType = if (mode == ExerciseMode.CYCLING) "CYCLING" else "RUNNING"
-        serviceScope.launch(Dispatchers.IO) {
-            workoutDao.insertSession(
-                WorkoutSession(
-                    sessionId = currentSessionId!!,
-                    startTime = System.currentTimeMillis(),
-                    exerciseType = sessionType
+            // Create new workout session in DB
+            currentSessionId = UUID.randomUUID().toString()
+            val sessionType = "RUNNING"
+            serviceScope.launch(Dispatchers.IO) {
+                workoutDao.insertSession(
+                    WorkoutSession(
+                        sessionId = currentSessionId!!,
+                        startTime = System.currentTimeMillis(),
+                        exerciseType = sessionType
+                    )
                 )
-            )
-            Log.d(TAG, "Created workout session: $currentSessionId ($sessionType)")
-        }
+                Log.d(TAG, "Created workout session: $currentSessionId ($sessionType)")
+            }
 
-        // Start Health Services
-        serviceScope.launch {
-            exerciseManager.startExercise(mode.toExerciseType())
-        }
+            // Start Health Services
+            serviceScope.launch {
+                exerciseManager.startExercise(mode.toExerciseType())
+            }
 
-        // Start 1Hz timer
-        startTimer()
+            // Start 1Hz timer
+            startTimer()
+        }
     }
 
     /**
