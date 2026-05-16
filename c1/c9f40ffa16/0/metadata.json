@@ -1,0 +1,37 @@
+{
+  "cli_version": "dev",
+  "checkpoint_id": "c1c9f40ffa16",
+  "session_id": "6273dfa1-51a9-4331-a022-88d96cc43b63",
+  "strategy": "manual-commit",
+  "created_at": "2026-05-16T10:23:47.638791905Z",
+  "branch": "feat/cycling-mode",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "app/src/main/kotlin/com/runvision/wear/service/ExerciseService.kt"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "ba7dc3e94391",
+  "token_usage": {
+    "input_tokens": 449,
+    "cache_creation_tokens": 3162257,
+    "cache_read_tokens": 46081940,
+    "output_tokens": 445012,
+    "api_call_count": 206
+  },
+  "session_metrics": {
+    "turn_count": 12
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-05-16T10:23:47.504783599Z",
+    "agent_lines": 0,
+    "agent_removed": 0,
+    "human_added": 55,
+    "human_modified": 22,
+    "human_removed": 0,
+    "total_committed": 55,
+    "total_lines_changed": 77,
+    "agent_percentage": 0,
+    "metric_version": 2
+  }
+}
