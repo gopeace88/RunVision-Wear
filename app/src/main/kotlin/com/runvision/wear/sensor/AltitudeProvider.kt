@@ -121,12 +121,13 @@ class AltitudeProvider(
                 else -> s.mode
             }
             val tau = if (newMode == AltitudeState.MODE_COARSE) TAU_COARSE else TAU_FINE
-            // c1, c2 positive + outer minus → negative feedback:
-            // ΔH>0 → X1>0 → U<0 → output H_B+U pulled toward H_REF.
+            // Patent eq.12-13: X1' = (ΔH-X1)/τ, X2' = X1/τ → 둘 다 1/τ scaling.
+            // 이전 의사코드에서 /τ 빠져 effective τ=dt로 300배 빠름 → X2 폭주.
+            // c1, c2 positive + outer minus → negative feedback.
             val c1 = 2.0 / tau
             val c2 = (1.0 / tau).pow(2.0)
-            val rawX1 = s.x1 + dt * (deltaH - s.x1)
-            val rawX2 = s.x2 + dt * s.x1
+            val rawX1 = s.x1 + (dt / tau) * (deltaH - s.x1)
+            val rawX2 = s.x2 + (dt / tau) * s.x1
             val rawU = -(c1 * rawX1 + c2 * rawX2)
             // Defense: state NaN/Inf reset + U clamp (±2000m).
             val newX1 = if (rawX1.isFinite()) rawX1 else 0.0
