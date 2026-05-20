@@ -32,7 +32,7 @@ fun MetricItem(
             painter = icon,
             contentDescription = null,
             tint = color,
-            modifier = Modifier.size(22.dp)
+            modifier = Modifier.size(44.dp)
         )
         Spacer(modifier = Modifier.width(4.dp))
         Text(

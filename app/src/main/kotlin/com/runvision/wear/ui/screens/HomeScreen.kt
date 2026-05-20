@@ -11,7 +11,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.wear.compose.material.*
+import androidx.wear.compose.material.Button
+import androidx.wear.compose.material.ButtonDefaults
+import androidx.wear.compose.material.Text
 import com.runvision.wear.ble.RLensConnection
 
 @Composable
@@ -22,104 +24,85 @@ fun HomeScreen(
     onRunClick: () -> Unit,
     onCycleClick: () -> Unit
 ) {
-    val listState = rememberScalingLazyListState()
-
-    Scaffold(
-        positionIndicator = {
-            PositionIndicator(scalingLazyListState = listState)
-        }
+    // 정적 화면: ScalingLazyColumn 제거 → 세로 중앙 정렬로 RunVision/모드버튼/상태 모두
+    // 한 화면 fit, 시작 시 아래로 치우치는 문제 해결.
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+            .padding(horizontal = 8.dp)
     ) {
-        ScalingLazyColumn(
-            state = listState,
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black)
+        Text(
+            text = "RunVision",
+            fontSize = 20.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color.White,
+            textAlign = TextAlign.Center,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            item {
+            Button(
+                onClick = onRunClick,
+                modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.primaryButtonColors()
+            ) {
                 Text(
-                    text = "RunVision",
-                    fontSize = 28.sp,
+                    text = "달리기",
+                    fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color.White,
-                    textAlign = TextAlign.Center,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp)
+                    overflow = TextOverflow.Ellipsis
                 )
             }
-
-            item { Spacer(modifier = Modifier.height(12.dp)) }
-
-            item {
-                Button(
-                    onClick = onRunClick,
-                    modifier = Modifier
-                        .fillMaxWidth(0.7f)
-                        .padding(horizontal = 8.dp),
-                    colors = ButtonDefaults.primaryButtonColors()
-                ) {
-                    Text(
-                        text = "달리기",
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-
-            item { Spacer(modifier = Modifier.height(8.dp)) }
-
-            item {
-                Button(
-                    onClick = onCycleClick,
-                    enabled = cyclingSupported,
-                    modifier = Modifier
-                        .fillMaxWidth(0.7f)
-                        .padding(horizontal = 8.dp),
-                    colors = ButtonDefaults.secondaryButtonColors()
-                ) {
-                    Text(
-                        text = "자전거",
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-
-            item { Spacer(modifier = Modifier.height(12.dp)) }
-
-            item {
-                val (statusText, statusColor) = when (cyclingHomeOverride(cyclingSupported, cyclingStartFailed)) {
-                    HomeOverride.UNSUPPORTED -> "자전거 미지원" to Color.Gray
-                    HomeOverride.START_FAILED -> "자전거 시작 실패" to Color(0xFFF44336)
-                    null -> when (connectionState) {
-                        RLensConnection.ConnectionState.CONNECTED -> "Connected" to Color(0xFF4CAF50)
-                        RLensConnection.ConnectionState.CONNECTING -> "Connecting.." to Color(0xFFFF9800)
-                        RLensConnection.ConnectionState.RECONNECTING -> "Reconnecting.." to Color(0xFFFF9800)
-                        RLensConnection.ConnectionState.SCANNING -> "Scanning.." to Color(0xFF2196F3)
-                        RLensConnection.ConnectionState.NOT_FOUND -> "Not Found" to Color(0xFFF44336)
-                        RLensConnection.ConnectionState.DISCONNECTED -> "READY" to Color.Gray
-                    }
-                }
+            Button(
+                onClick = onCycleClick,
+                enabled = cyclingSupported,
+                modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.secondaryButtonColors()
+            ) {
                 Text(
-                    text = statusText,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = statusColor,
-                    textAlign = TextAlign.Center,
+                    text = "자전거",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp)
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        val (statusText, statusColor) = when (cyclingHomeOverride(cyclingSupported, cyclingStartFailed)) {
+            HomeOverride.UNSUPPORTED -> "자전거 미지원" to Color.Gray
+            HomeOverride.START_FAILED -> "자전거 시작 실패" to Color(0xFFF44336)
+            null -> when (connectionState) {
+                RLensConnection.ConnectionState.CONNECTED -> "Connected" to Color(0xFF4CAF50)
+                RLensConnection.ConnectionState.CONNECTING -> "Connecting.." to Color(0xFFFF9800)
+                RLensConnection.ConnectionState.RECONNECTING -> "잠시끊김.." to Color(0xFFFF9800)
+                RLensConnection.ConnectionState.SCANNING -> "Scanning.." to Color(0xFF2196F3)
+                RLensConnection.ConnectionState.NOT_FOUND -> "Not Found" to Color(0xFFF44336)
+                RLensConnection.ConnectionState.DISCONNECTED -> "READY" to Color.Gray
+            }
+        }
+        Text(
+            text = statusText,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Medium,
+            color = statusColor,
+            textAlign = TextAlign.Center,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.fillMaxWidth()
+        )
     }
 }

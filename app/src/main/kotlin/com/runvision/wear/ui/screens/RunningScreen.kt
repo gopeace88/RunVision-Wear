@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.wear.compose.material.*
 import com.runvision.wear.R
+import com.runvision.wear.ble.RLensConnection
 import com.runvision.wear.data.RunningMetrics
 import com.runvision.wear.ui.components.MetricItem
 import com.runvision.wear.ui.theme.*
@@ -35,12 +36,13 @@ fun RunningScreen(
     isPaused: Boolean = false,
     onPauseClick: () -> Unit,
     onStopClick: () -> Unit,
-    onScreenTouch: () -> Unit = {}
+    onScreenTouch: () -> Unit = {},
+    connectionState: RLensConnection.ConnectionState = RLensConnection.ConnectionState.CONNECTED
 ) {
     if (isAmbient) {
         AmbientRunningScreen(metrics)
     } else {
-        InteractiveRunningScreen(metrics, isPaused, onPauseClick, onStopClick, onScreenTouch)
+        InteractiveRunningScreen(metrics, isPaused, onPauseClick, onStopClick, onScreenTouch, connectionState)
     }
 }
 
@@ -133,7 +135,8 @@ private fun InteractiveRunningScreen(
     isPaused: Boolean,
     onPauseClick: () -> Unit,
     onStopClick: () -> Unit,
-    onScreenTouch: () -> Unit
+    onScreenTouch: () -> Unit,
+    connectionState: RLensConnection.ConnectionState = RLensConnection.ConnectionState.CONNECTED
 ) {
     val currentTime = remember(metrics.elapsedSeconds) {
         SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
@@ -147,6 +150,18 @@ private fun InteractiveRunningScreen(
                 detectTapGestures(onTap = { onScreenTouch() })
             }
     ) {
+        // BLE 잠시끊김 인디케이터 (GPS 신호 약화 표시 스타일).
+        // CONNECTED 외 모든 상태에서 상시 표시 — RECONNECTING ↔ CONNECTING 사이 깜빡임 방지.
+        if (connectionState != RLensConnection.ConnectionState.CONNECTED) {
+            Text(
+                text = "● 잠시끊김",
+                fontSize = 11.sp,
+                color = Color(0xFFFF9800),
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 8.dp)
+            )
+        }
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
@@ -203,13 +218,13 @@ private fun InteractiveRunningScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     MetricItem(
-                        icon = painterResource(R.drawable.ic_runner),
+                        icon = painterResource(R.drawable.ic_pace),
                         value = metrics.paceFormatted,
                         color = CyanPace,
                         modifier = Modifier.weight(1f)
                     )
                     MetricItem(
-                        icon = painterResource(R.drawable.ic_shoe),
+                        icon = painterResource(R.drawable.ic_cadence),
                         value = "${metrics.cadence}",
                         color = GreenCadence,
                         modifier = Modifier.weight(1f)
@@ -221,13 +236,13 @@ private fun InteractiveRunningScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     MetricItem(
-                        icon = painterResource(R.drawable.ic_route),
+                        icon = painterResource(R.drawable.ic_distance),
                         value = metrics.distanceKmFormatted,
                         color = OrangeDistance,
                         modifier = Modifier.weight(1f)
                     )
                     MetricItem(
-                        icon = painterResource(R.drawable.ic_heart),
+                        icon = painterResource(R.drawable.ic_heartrate),
                         value = "${metrics.heartRate}",
                         color = RedHeart,
                         modifier = Modifier.weight(1f)

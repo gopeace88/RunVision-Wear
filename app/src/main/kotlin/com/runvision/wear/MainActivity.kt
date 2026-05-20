@@ -290,7 +290,8 @@ class MainActivity : ComponentActivity() {
                                 stopRunning()
                                 nav.popBackStack()
                             },
-                            onScreenTouch = { wakeUpScreen() }
+                            onScreenTouch = { wakeUpScreen() },
+                            connectionState = connectionState.value
                         )
                     }
                     composable("cycling") {
@@ -309,7 +310,8 @@ class MainActivity : ComponentActivity() {
                                 stopRunning()
                                 nav.popBackStack()
                             },
-                            onScreenTouch = { wakeUpScreen() }
+                            onScreenTouch = { wakeUpScreen() },
+                            connectionState = connectionState.value
                         )
                     }
                 }
