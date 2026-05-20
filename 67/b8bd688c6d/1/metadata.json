@@ -1,0 +1,106 @@
+{
+  "cli_version": "dev",
+  "checkpoint_id": "67b8bd688c6d",
+  "session_id": "8ab03d4a-5867-487f-a430-056b79a55d26",
+  "strategy": "manual-commit",
+  "created_at": "2026-05-20T02:57:50.399901907Z",
+  "branch": "main",
+  "checkpoints_count": 8,
+  "files_touched": [
+    "app/src/main/kotlin/com/runvision/wear/MainActivity.kt",
+    "app/src/main/kotlin/com/runvision/wear/ui/components/MetricItem.kt",
+    "app/src/main/kotlin/com/runvision/wear/ui/screens/CyclingScreen.kt",
+    "app/src/main/kotlin/com/runvision/wear/ui/screens/HomeScreen.kt",
+    "app/src/main/kotlin/com/runvision/wear/ui/screens/RunningScreen.kt"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "0f2bfb02df5a",
+  "token_usage": {
+    "input_tokens": 333,
+    "cache_creation_tokens": 585804,
+    "cache_read_tokens": 45578632,
+    "output_tokens": 259751,
+    "api_call_count": 178
+  },
+  "session_metrics": {
+    "turn_count": 8
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-05-20T02:57:50.350447228Z",
+    "agent_lines": 119,
+    "agent_removed": 105,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 119,
+    "total_lines_changed": 224,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    },
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 47,
+      "agent_lines_removed": 17
+    },
+    {
+      "checkpoint_number": 3,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 47,
+      "agent_lines_removed": 17
+    },
+    {
+      "checkpoint_number": 4,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 47,
+      "agent_lines_removed": 17
+    },
+    {
+      "checkpoint_number": 5,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 49,
+      "agent_lines_removed": 18
+    },
+    {
+      "checkpoint_number": 6,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 82,
+      "agent_lines_removed": 52
+    },
+    {
+      "checkpoint_number": 7,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 82,
+      "agent_lines_removed": 52
+    },
+    {
+      "checkpoint_number": 8,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 119,
+      "agent_lines_removed": 105
+    },
+    {
+      "checkpoint_number": 9,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 119,
+      "agent_lines_removed": 105
+    }
+  ]
+}
