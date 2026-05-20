@@ -71,6 +71,17 @@ class ExerciseManager(context: Context) {
                 // value (e.g. Double.MAX_VALUE); a finite plausible-range check is
                 // robust across health-services-client versions (constant name varies).
                 val alt = location.value.altitude
+                // GPS altitude — Galaxy Watch 6 등 일부 워치는 Double.MAX_VALUE sentinel 반환.
+                // ABSOLUTE_ELEVATION 지원 워치는 아래 callback 이 primary, 이건 backup.
+                if (alt.isFinite() && alt > -1000.0 && alt < 10000.0) {
+                    onAltitudeUpdate?.invoke(alt)
+                }
+            }
+
+            // 기압계 기반 absolute elevation (capability check 로 지원 워치만 dataType 등록).
+            // GPS 무관 → 실내에서도 동작. Samsung AltitudeTracker 등 기압계+날씨 fusion 활용.
+            update.latestMetrics.getData(DataType.ABSOLUTE_ELEVATION)?.lastOrNull()?.let {
+                val alt = it.value
                 if (alt.isFinite() && alt > -1000.0 && alt < 10000.0) {
                     onAltitudeUpdate?.invoke(alt)
                 }
@@ -216,6 +227,13 @@ class ExerciseManager(context: Context) {
             if (DataType.STEPS in runningCapabilities.supportedDataTypes) {
                 dataTypes.add(DataType.STEPS)
                 Log.d(TAG, "Adding STEPS")
+            }
+            // barometer 기반 absolute elevation — 지원 워치(Galaxy Watch 5/6 등 기압계 보유)에서
+            // GPS 무관 altitude 측정. 미지원 워치는 LOCATION.altitude 로 fallback (sentinel 차단 후).
+            // 모델별 if/else 분기 없이 capability set membership 만으로 동작.
+            if (DataType.ABSOLUTE_ELEVATION in runningCapabilities.supportedDataTypes) {
+                dataTypes.add(DataType.ABSOLUTE_ELEVATION)
+                Log.d(TAG, "Adding ABSOLUTE_ELEVATION")
             }
 
             Log.d(TAG, "Final data types to request: $dataTypes")
