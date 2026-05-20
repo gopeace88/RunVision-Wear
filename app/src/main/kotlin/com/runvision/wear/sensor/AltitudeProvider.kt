@@ -80,6 +80,9 @@ class AltitudeProvider(
         private const val SIGMA_DEM = 5.0
         // Recalibrate P_base no more often than this in FINE mode.
         private const val RECAL_INTERVAL_MS = 600_000L
+        // Periodic state persist throttle. Mirrors watchOS twin (30s). 운동 중 워치 sleep
+        // / process kill 시 anchor 손실 방어 — stop()만 의존하지 않도록.
+        private const val PERSIST_INTERVAL_MS = 30_000L
         // Refuse degenerate dt (sensor backpressure / wakeup race).
         private const val MAX_DT_S = 5.0
         private const val MIN_DT_S = 0.05
@@ -149,6 +152,7 @@ class AltitudeProvider(
 
     @Volatile private var state: AltitudeState = AltitudeState.fromJson(prefs.getString(KEY_STATE, null))
     @Volatile private var lastSampleNanos: Long = 0L
+    @Volatile private var lastPersistMs: Long = 0L
 
     // Latest GPS hint, updated from Health Services LOCATION callback.
     @Volatile private var lastLat: Double? = null
@@ -272,6 +276,12 @@ class AltitudeProvider(
             lastFusedM = out
             onAltitude?.invoke(out)
             onDiagnostic?.invoke(Diag(hB, hRef, refSource, next.mode, recalU, recalPBase, sigmaRef))
+
+            // Periodic persist (30s throttle) — process kill / sleep 시에도 anchor 보존.
+            if (nowMs - lastPersistMs > PERSIST_INTERVAL_MS) {
+                persist()
+                lastPersistMs = nowMs
+            }
         }
     }
 
