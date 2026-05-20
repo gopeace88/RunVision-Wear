@@ -103,13 +103,19 @@ class AltitudeProvider(
             sigmaRef: Double?,
             dt: Double,
         ): Pair<AltitudeState, Double> {
-            if (hRef == null || sigmaRef == null) {
+            // Defense: H_B sanity. NaN/Inf 또는 비현실적 범위면 propagate (sensor garbage 방어).
+            if (!hB.isFinite() || kotlin.math.abs(hB) >= 12000.0) {
+                return s to (s.x1.let { if (it.isFinite()) hB + s.u else 0.0 })
+            }
+            // H_REF sanity. GPS/DEM spike(±50000m 등) 방어. 비정상이면 ref 무시 → propagate.
+            val validRef = hRef != null && sigmaRef != null && hRef.isFinite() && kotlin.math.abs(hRef) < 10000.0
+            if (!validRef) {
                 return s to (hB + s.u)
             }
-            val deltaH = hB - hRef
+            val deltaH = hB - hRef!!
             val totalErr = kotlin.math.abs(s.u + deltaH)
             val newMode = when {
-                totalErr > BETA * sigmaRef -> AltitudeState.MODE_COARSE
+                totalErr > BETA * sigmaRef!! -> AltitudeState.MODE_COARSE
                 s.mode == AltitudeState.MODE_COARSE && totalErr < ALPHA * sigmaRef ->
                     AltitudeState.MODE_FINE
                 else -> s.mode
@@ -119,9 +125,14 @@ class AltitudeProvider(
             // ΔH>0 → X1>0 → U<0 → output H_B+U pulled toward H_REF.
             val c1 = 2.0 / tau
             val c2 = (1.0 / tau).pow(2.0)
-            val newX1 = s.x1 + dt * (deltaH - s.x1)
-            val newX2 = s.x2 + dt * s.x1
-            val newU = -(c1 * newX1 + c2 * newX2)
+            val rawX1 = s.x1 + dt * (deltaH - s.x1)
+            val rawX2 = s.x2 + dt * s.x1
+            val rawU = -(c1 * rawX1 + c2 * rawX2)
+            // Defense: state NaN/Inf reset + U clamp (±2000m).
+            val newX1 = if (rawX1.isFinite()) rawX1 else 0.0
+            val newX2 = if (rawX2.isFinite()) rawX2 else 0.0
+            val safeU = if (rawU.isFinite()) rawU else 0.0
+            val newU = safeU.coerceIn(-2000.0, 2000.0)
             val next = s.copy(x1 = newX1, x2 = newX2, u = newU, mode = newMode)
             return next to (hB + newU)
         }
