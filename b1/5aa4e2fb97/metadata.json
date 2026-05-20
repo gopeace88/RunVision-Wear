@@ -3,7 +3,7 @@
   "checkpoint_id": "b15aa4e2fb97",
   "strategy": "manual-commit",
   "branch": "main",
-  "checkpoints_count": 1,
+  "checkpoints_count": 8,
   "files_touched": [
     "app/src/main/kotlin/com/runvision/wear/health/ExerciseManager.kt"
   ],
@@ -13,13 +13,19 @@
       "transcript": "/b1/5aa4e2fb97/0/full.jsonl",
       "content_hash": "/b1/5aa4e2fb97/0/content_hash.txt",
       "prompt": "/b1/5aa4e2fb97/0/prompt.txt"
+    },
+    {
+      "metadata": "/b1/5aa4e2fb97/1/metadata.json",
+      "transcript": "/b1/5aa4e2fb97/1/full.jsonl",
+      "content_hash": "/b1/5aa4e2fb97/1/content_hash.txt",
+      "prompt": "/b1/5aa4e2fb97/1/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 662,
-    "cache_creation_tokens": 7522137,
-    "cache_read_tokens": 121533672,
-    "output_tokens": 712080,
-    "api_call_count": 314
+    "input_tokens": 773,
+    "cache_creation_tokens": 8527492,
+    "cache_read_tokens": 143125209,
+    "output_tokens": 794652,
+    "api_call_count": 360
   }
 }

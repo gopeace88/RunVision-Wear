@@ -1,0 +1,97 @@
+{
+  "cli_version": "dev",
+  "checkpoint_id": "b15aa4e2fb97",
+  "session_id": "8ab03d4a-5867-487f-a430-056b79a55d26",
+  "strategy": "manual-commit",
+  "created_at": "2026-05-20T05:44:52.673514532Z",
+  "branch": "main",
+  "checkpoints_count": 7,
+  "files_touched": [
+    "app/src/main/kotlin/com/runvision/wear/health/ExerciseManager.kt"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "eb1f6ce136c5",
+  "checkpoint_transcript_start": 1102,
+  "transcript_lines_at_start": 1102,
+  "token_usage": {
+    "input_tokens": 111,
+    "cache_creation_tokens": 1005355,
+    "cache_read_tokens": 21591537,
+    "output_tokens": 82572,
+    "api_call_count": 46
+  },
+  "session_metrics": {
+    "turn_count": 15
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-05-20T05:44:52.608887411Z",
+    "agent_lines": 15,
+    "agent_removed": 0,
+    "human_added": 0,
+    "human_modified": 3,
+    "human_removed": 2,
+    "total_committed": 18,
+    "total_lines_changed": 20,
+    "agent_percentage": 75,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    },
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 1,
+      "agent_lines_removed": 0
+    },
+    {
+      "checkpoint_number": 3,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 1,
+      "agent_lines_removed": 0
+    },
+    {
+      "checkpoint_number": 4,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 1,
+      "agent_lines_removed": 0
+    },
+    {
+      "checkpoint_number": 5,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 1,
+      "agent_lines_removed": 0
+    },
+    {
+      "checkpoint_number": 6,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 20,
+      "agent_lines_removed": 0
+    },
+    {
+      "checkpoint_number": 7,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 20,
+      "agent_lines_removed": 0
+    },
+    {
+      "checkpoint_number": 8,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 20,
+      "agent_lines_removed": 0
+    }
+  ]
+}
