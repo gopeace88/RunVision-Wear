@@ -1,0 +1,56 @@
+{
+  "cli_version": "dev",
+  "checkpoint_id": "67b8bd688c6d",
+  "session_id": "6273dfa1-51a9-4331-a022-88d96cc43b63",
+  "strategy": "manual-commit",
+  "created_at": "2026-05-20T02:57:46.988729094Z",
+  "branch": "main",
+  "checkpoints_count": 2,
+  "files_touched": [
+    "app/src/main/kotlin/com/runvision/wear/MainActivity.kt",
+    "app/src/main/kotlin/com/runvision/wear/ui/components/MetricItem.kt",
+    "app/src/main/kotlin/com/runvision/wear/ui/screens/HomeScreen.kt",
+    "app/src/main/kotlin/com/runvision/wear/ui/screens/RunningScreen.kt"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "64751b23ff02",
+  "token_usage": {
+    "input_tokens": 662,
+    "cache_creation_tokens": 7522137,
+    "cache_read_tokens": 121533672,
+    "output_tokens": 712080,
+    "api_call_count": 314
+  },
+  "session_metrics": {
+    "turn_count": 27
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-05-20T02:57:46.84037037Z",
+    "agent_lines": 98,
+    "agent_removed": 98,
+    "human_added": 21,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 119,
+    "total_lines_changed": 224,
+    "agent_percentage": 87.5,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    },
+    {
+      "checkpoint_number": 3,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 132,
+      "agent_lines_removed": 0
+    }
+  ]
+}
