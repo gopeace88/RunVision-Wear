@@ -26,7 +26,7 @@ import kotlin.math.pow
  *   ΔH  = H_B − H_REF                              (DEM or GPS reference)
  *   X1' = (ΔH − X1) / τ                            (eq. 12)
  *   X2' = X1 / τ                                   (eq. 13)
- *   U   = −(C1·X1 + C2·X2),  C1 = −2/τ, C2 = −1/τ²
+ *   U   = −(C1·X1 + C2·X2),  C1 = 2/τ, C2 = 1/τ² (positive, outer minus → negative feedback)
  *
  * τ is mode-switched: COARSE (fast settle on startup / after a jolt) vs FINE
  * (slow steady-state). A periodic re-anchor of P_base in FINE mode soaks up
@@ -115,8 +115,10 @@ class AltitudeProvider(
                 else -> s.mode
             }
             val tau = if (newMode == AltitudeState.MODE_COARSE) TAU_COARSE else TAU_FINE
-            val c1 = -2.0 / tau
-            val c2 = -(1.0 / tau).pow(2.0)
+            // c1, c2 positive + outer minus → negative feedback:
+            // ΔH>0 → X1>0 → U<0 → output H_B+U pulled toward H_REF.
+            val c1 = 2.0 / tau
+            val c2 = (1.0 / tau).pow(2.0)
             val newX1 = s.x1 + dt * (deltaH - s.x1)
             val newX2 = s.x2 + dt * s.x1
             val newU = -(c1 * newX1 + c2 * newX2)
