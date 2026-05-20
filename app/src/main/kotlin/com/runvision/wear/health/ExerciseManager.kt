@@ -35,7 +35,14 @@ class ExerciseManager(context: Context) {
     var onStepsUpdate: ((Int) -> Unit)? = null
     var onDistanceUpdate: ((Double) -> Unit)? = null  // Distance in meters
     var onStepsDeltaUpdate: ((Long) -> Unit)? = null  // Real step deltas for stride learning
-    var onAltitudeUpdate: ((Double) -> Unit)? = null  // Current altitude — cycling only; running callers do not set this callback
+    /**
+     * GPS sample with altitude + vertical accuracy. Used by AltitudeProvider to
+     * pre-warm DEM cell lookups and as a fallback reference when DEM is unavailable.
+     * - `altMeters` is WGS84 ellipsoid on Wear OS 4 (no AltitudeConverter pre-API 34).
+     * - `verticalSigma` is null if the SDK doesn't expose verticalPositionErrorMeters
+     *   on this device — AltitudeProvider treats null as "GPS unusable as reference".
+     */
+    var onGpsForAltitudeUpdate: ((lat: Double, lon: Double, altMeters: Double?, verticalSigma: Double?) -> Unit)? = null
 
     // MeasureCallback for immediate heart rate (before exercise starts)
     private val measureCallback = object : MeasureCallback {
@@ -67,24 +74,18 @@ class ExerciseManager(context: Context) {
                     location.value.longitude,
                     System.currentTimeMillis()
                 )
-                // Cycling altitude. SDK sentinel for "no altitude" is a non-physical
-                // value (e.g. Double.MAX_VALUE); a finite plausible-range check is
-                // robust across health-services-client versions (constant name varies).
-                val alt = location.value.altitude
-                // GPS altitude — Galaxy Watch 6 등 일부 워치는 Double.MAX_VALUE sentinel 반환.
-                // ABSOLUTE_ELEVATION 지원 워치는 아래 callback 이 primary, 이건 backup.
-                if (alt.isFinite() && alt > -1000.0 && alt < 10000.0) {
-                    onAltitudeUpdate?.invoke(alt)
-                }
-            }
-
-            // 기압계 기반 absolute elevation (capability check 로 지원 워치만 dataType 등록).
-            // GPS 무관 → 실내에서도 동작. Samsung AltitudeTracker 등 기압계+날씨 fusion 활용.
-            update.latestMetrics.getData(DataType.ABSOLUTE_ELEVATION)?.lastOrNull()?.let {
-                val alt = it.value
-                if (alt.isFinite() && alt > -1000.0 && alt < 10000.0) {
-                    onAltitudeUpdate?.invoke(alt)
-                }
+                // GPS sample → AltitudeProvider. ABSOLUTE_ELEVATION (Google internal
+                // fusion) is intentionally NOT subscribed; we run our own US6735542
+                // two-state loop in AltitudeProvider with DEM as the primary reference.
+                val rawAlt = location.value.altitude
+                val sanitizedAlt = if (rawAlt.isFinite() && rawAlt > -1000.0 && rawAlt < 10000.0) rawAlt else null
+                val sigma = readVerticalSigma(location.value)
+                onGpsForAltitudeUpdate?.invoke(
+                    location.value.latitude,
+                    location.value.longitude,
+                    sanitizedAlt,
+                    sigma,
+                )
             }
 
             update.latestMetrics.getData(DataType.STEPS_PER_MINUTE)?.lastOrNull()?.let {
@@ -121,6 +122,38 @@ class ExerciseManager(context: Context) {
 
         override fun onAvailabilityChanged(dataType: DataType<*, *>, availability: Availability) {
             Log.d(TAG, "Availability changed: $dataType -> $availability")
+        }
+    }
+
+    /**
+     * Read verticalPositionErrorMeters from a LocationData value if the SDK
+     * exposes it. health-services-client adds new fields across alpha versions
+     * — reflect once, cache the method, return null if unavailable.
+     * Null sigma means "GPS unusable as altitude reference" downstream.
+     */
+    private var verticalSigmaMethod: java.lang.reflect.Method? = null
+    private var verticalSigmaResolved = false
+    private fun readVerticalSigma(loc: Any): Double? {
+        if (!verticalSigmaResolved) {
+            verticalSigmaMethod = try {
+                // Kotlin property `verticalPositionErrorMeters` → JVM getter.
+                loc.javaClass.getMethod("getVerticalPositionErrorMeters")
+            } catch (_: NoSuchMethodException) {
+                null
+            }
+            verticalSigmaResolved = true
+            Log.d(
+                TAG,
+                "verticalPositionErrorMeters resolved=${verticalSigmaMethod != null} " +
+                    "(null → GPS not used as altitude reference; DEM-only path)"
+            )
+        }
+        val m = verticalSigmaMethod ?: return null
+        return try {
+            val v = m.invoke(loc) as? Double
+            v?.takeIf { it.isFinite() && it > 0.0 }
+        } catch (_: Exception) {
+            null
         }
     }
 
@@ -228,13 +261,10 @@ class ExerciseManager(context: Context) {
                 dataTypes.add(DataType.STEPS)
                 Log.d(TAG, "Adding STEPS")
             }
-            // barometer 기반 absolute elevation — 지원 워치(Galaxy Watch 5/6 등 기압계 보유)에서
-            // GPS 무관 altitude 측정. 미지원 워치는 LOCATION.altitude 로 fallback (sentinel 차단 후).
-            // 모델별 if/else 분기 없이 capability set membership 만으로 동작.
-            if (DataType.ABSOLUTE_ELEVATION in runningCapabilities.supportedDataTypes) {
-                dataTypes.add(DataType.ABSOLUTE_ELEVATION)
-                Log.d(TAG, "Adding ABSOLUTE_ELEVATION")
-            }
+            // NOTE: ABSOLUTE_ELEVATION (Google Health Services internal fusion) is
+            // deliberately NOT subscribed. AltitudeProvider runs an in-app
+            // US Patent 6735542 two-state feedback loop on raw barometer + DEM
+            // reference instead. See sensor/AltitudeProvider.kt for details.
 
             Log.d(TAG, "Final data types to request: $dataTypes")
 

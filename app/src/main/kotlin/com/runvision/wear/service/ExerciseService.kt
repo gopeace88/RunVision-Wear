@@ -29,6 +29,7 @@ import com.runvision.wear.data.CyclingMetrics
 import com.runvision.wear.engine.CyclingEngine
 import com.runvision.wear.engine.RunningEngine
 import com.runvision.wear.health.ExerciseManager
+import com.runvision.wear.sensor.AltitudeProvider
 import kotlinx.coroutines.*
 import java.util.UUID
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -67,6 +68,7 @@ class ExerciseService : Service() {
     private lateinit var runningEngine: RunningEngine
     private lateinit var cyclingEngine: CyclingEngine
     private lateinit var exerciseManager: ExerciseManager
+    private lateinit var altitudeProvider: AltitudeProvider
 
     // @Volatile: setMode() runs on main thread; mode is read in startExercise()
     // which is auto-invoked from the BLE GATT callback (binder thread).
@@ -137,6 +139,29 @@ class ExerciseService : Service() {
         runningEngine = RunningEngine(this)
         cyclingEngine = CyclingEngine()
 
+        // AltitudeProvider: in-app US6735542 two-state loop on raw barometer
+        // + Open-Meteo DEM reference. Replaces Health Services ABSOLUTE_ELEVATION
+        // (intentionally not subscribed — that path is opaque Google fusion).
+        altitudeProvider = AltitudeProvider(this).apply {
+            onAltitude = { meters ->
+                if (mode == ExerciseMode.CYCLING) {
+                    cyclingEngine.updateAltitude(meters)
+                }
+            }
+            onDiagnostic = { d ->
+                Log.d(
+                    "Altitude",
+                    "H_B=%.2f H_REF=%s mode=%d U=%.2f P_base=%.0f σ=%s src=%s".format(
+                        d.hB,
+                        d.hRef?.let { "%.2f".format(it) } ?: "null",
+                        d.mode, d.u, d.pBasePa,
+                        d.sigma?.let { "%.1f".format(it) } ?: "null",
+                        d.refSource,
+                    )
+                )
+            }
+        }
+
         // Initialize Room Database
         workoutDatabase = WorkoutDatabase.getInstance(this)
         workoutDao = workoutDatabase.workoutDao()
@@ -162,6 +187,10 @@ class ExerciseService : Service() {
                     runningEngine.updateGps(lat, lon, timestamp)
                 }
             }
+            onGpsForAltitudeUpdate = { lat, lon, alt, sigma ->
+                // Feeds DEM-cell lookup + fallback reference into AltitudeProvider.
+                altitudeProvider.pushGps(lat, lon, alt, sigma)
+            }
             onStepsUpdate = { steps ->
                 Log.d(TAG, "Cadence update: $steps")
                 if (mode != ExerciseMode.CYCLING) {
@@ -182,11 +211,9 @@ class ExerciseService : Service() {
                     runningEngine.updateStepsDelta(steps)
                 }
             }
-            onAltitudeUpdate = { meters ->
-                if (mode == ExerciseMode.CYCLING) {
-                    cyclingEngine.updateAltitude(meters)
-                }
-            }
+            // NOTE: altitude no longer flows via ExerciseManager. AltitudeProvider
+            // owns the barometer pipeline and pushes via its own onAltitude callback
+            // (wired above at the provider construction site).
         }
 
         createNotificationChannel()
@@ -375,6 +402,16 @@ class ExerciseService : Service() {
     fun startExercise() {
         Log.d(TAG, "Starting exercise from service")
 
+        // Begin barometer sampling for the in-app altitude loop.
+        // Cycling-only consumer today; gating here avoids the sensor stream cost
+        // during running (RUNNING does not read altitude from cyclingEngine).
+        // hasBarometer=false on Galaxy Watch 4 etc. → caller path still works,
+        // AltitudeProvider just stays silent (cyclingEngine.altitude untouched).
+        if (mode == ExerciseMode.CYCLING) {
+            val baroStarted = altitudeProvider.start()
+            Log.d(TAG, "AltitudeProvider start: baro=$baroStarted")
+        }
+
         // Ensure foreground service is started (needed for auto-start from BLE callback)
         acquireWakeLock()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
@@ -469,6 +506,9 @@ class ExerciseService : Service() {
      */
     fun stopExercise() {
         Log.d(TAG, "Stopping exercise from service")
+
+        // Stop barometer sampling first so state persists with the latest values.
+        if (this::altitudeProvider.isInitialized) altitudeProvider.stop()
         // Clear any cycling start-failure banner so it doesn't persist on Home
         // after the user backs out of a failed cycling attempt.
         _cyclingStartFailed.value = false
