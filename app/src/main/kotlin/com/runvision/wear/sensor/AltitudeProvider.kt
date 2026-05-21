@@ -52,8 +52,8 @@ import kotlin.math.pow
  */
 class AltitudeProvider(
     private val context: Context,
-    /** Network-backed DEM client. Injectable for tests. */
-    private val elevation: ElevationLookup = ElevationLookup(),
+    /** Network-backed DEM client. Injectable for tests. Default uses context for disk persist. */
+    private val elevation: ElevationLookup = ElevationLookup(context),
 ) {
 
     /** Inverse-variance weighted anchor input. σ는 GPS verticalAccuracy(m).

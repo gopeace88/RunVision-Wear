@@ -1,5 +1,7 @@
 package com.runvision.wear.network
 
+import android.content.Context
+import android.content.SharedPreferences
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
@@ -25,7 +27,10 @@ import kotlin.math.floor
  * field, ~50 lines of network code. Adding a client framework here would be
  * over-engineering.
  */
-class ElevationLookup {
+class ElevationLookup(
+    /** Optional disk persistence. null → in-memory only (tests, no-context callers). */
+    context: Context? = null,
+) {
 
     companion object {
         private const val TAG = "ElevationLookup"
@@ -36,6 +41,10 @@ class ElevationLookup {
         private const val MAX_CACHE_ENTRIES = 200
         private const val CONNECT_TIMEOUT_MS = 4_000
         private const val READ_TIMEOUT_MS = 4_000
+        /** Disk persistence key + throttle. ~30 lines extra, lets cache survive process kill. */
+        private const val PREFS_NAME = "elevation_cache"
+        private const val KEY_CACHE = "cells_csv"
+        private const val PERSIST_THROTTLE_MS = 30_000L
     }
 
     /** (cellLatIdx, cellLonIdx) -> elevation meters (MSL). */
@@ -43,6 +52,44 @@ class ElevationLookup {
 
     /** Per-cell mutex to dedupe concurrent fetches for the same cell. */
     private val fetchLocks = ConcurrentHashMap<Long, Mutex>()
+
+    /** Disk persistence — survives process kill so phone-free 자주 가는 곳은 cache hit.
+     *  NOTE: Open-Meteo dataset 자체 한국 도심에서 -25-30m off. Disk persist는 그 값을
+     *  영구화. dataset quality는 별개 (NGII 등 교체로만 해소). */
+    private val prefs: SharedPreferences? = context?.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    @Volatile private var lastPersistMs: Long = 0L
+
+    init {
+        // Load on construct. Format: "key1:value1,key2:value2,..." (no JSON dep)
+        prefs?.getString(KEY_CACHE, null)?.let { csv ->
+            try {
+                for (entry in csv.split(",")) {
+                    if (entry.isEmpty()) continue
+                    val parts = entry.split(":")
+                    if (parts.size != 2) continue
+                    val key = parts[0].toLongOrNull() ?: continue
+                    val value = parts[1].toDoubleOrNull() ?: continue
+                    cache[key] = value
+                }
+                Log.d(TAG, "Loaded ${cache.size} cells from disk")
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to load DEM cache: ${e.message}")
+            }
+        }
+    }
+
+    private fun maybePersist() {
+        val p = prefs ?: return
+        val now = System.currentTimeMillis()
+        if (now - lastPersistMs < PERSIST_THROTTLE_MS) return
+        lastPersistMs = now
+        try {
+            val csv = cache.entries.joinToString(",") { "${it.key}:${it.value}" }
+            p.edit().putString(KEY_CACHE, csv).apply()
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to persist DEM cache: ${e.message}")
+        }
+    }
 
     /**
      * Synchronous cache lookup. Returns null if the cell isn't fetched yet.
@@ -81,6 +128,7 @@ class ElevationLookup {
                 }
                 cache[key] = elevation
                 Log.d(TAG, "DEM cached lat=$lat lon=$lon -> $elevation m (cells=${cache.size})")
+                maybePersist()
             }
         } finally {
             lock.unlock()

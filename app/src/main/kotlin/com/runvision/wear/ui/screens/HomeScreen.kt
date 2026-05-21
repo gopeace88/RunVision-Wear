@@ -85,6 +85,9 @@ fun HomeScreen(
         val (statusText, statusColor) = when (cyclingHomeOverride(cyclingSupported, cyclingStartFailed)) {
             HomeOverride.UNSUPPORTED -> "자전거 미지원" to Color.Gray
             HomeOverride.START_FAILED -> "자전거 시작 실패" to Color(0xFFF44336)
+            // HomeScreen entry에선 WAITING_GPS_LOCK 발생 안 함 (그 시점엔 CyclingScreen으로
+            // 이미 navigate). 안전상 도달 시 진행 중 메시지로 처리.
+            HomeOverride.WAITING_GPS_LOCK -> "GPS 검색 중.." to Color(0xFFFF9800)
             null -> when (connectionState) {
                 RLensConnection.ConnectionState.CONNECTED -> "Connected" to Color(0xFF4CAF50)
                 RLensConnection.ConnectionState.CONNECTING -> "Connecting.." to Color(0xFFFF9800)

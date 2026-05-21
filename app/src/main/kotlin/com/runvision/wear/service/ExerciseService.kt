@@ -126,6 +126,15 @@ class ExerciseService : Service() {
     private val _isPaused = MutableStateFlow(false)
     val isPaused: StateFlow<Boolean> = _isPaused
 
+    // GPS lock gating (cycling 모드만). Health Services 세션은 시작되어 LOCATION 데이터를
+    // 수신하지만, cyclingEngine + altitudeProvider + isRunning은 σ_v≤15m sample 3개
+    // 연속 수신될 때까지 지연. UI는 _isWaitingGpsLock 보고 "GPS 검색 중" 표시.
+    private val _isWaitingGpsLock = MutableStateFlow(false)
+    val isWaitingGpsLock: StateFlow<Boolean> = _isWaitingGpsLock
+    @Volatile private var gpsLockCount: Int = 0
+    private val gpsLockRequiredSamples = 3
+    private val gpsLockSigmaGate = 15.0
+
     inner class LocalBinder : Binder() {
         fun getService(): ExerciseService = this@ExerciseService
     }
@@ -188,6 +197,19 @@ class ExerciseService : Service() {
                 }
             }
             onGpsForAltitudeUpdate = { lat, lon, alt, sigma ->
+                // GPS lock gate (CYCLING only). σ_v ≤ 15m × 3 sample 연속 → activate.
+                if (mode == ExerciseMode.CYCLING && _isWaitingGpsLock.value) {
+                    if (sigma != null && sigma > 0.0 && sigma <= gpsLockSigmaGate) {
+                        gpsLockCount++
+                        Log.d(TAG, "GPS lock progress: $gpsLockCount/$gpsLockRequiredSamples (σ_v=$sigma)")
+                        if (gpsLockCount >= gpsLockRequiredSamples) {
+                            activateCyclingAfterGpsLock()
+                        }
+                    } else {
+                        // Bad sample resets streak — 3 sample 연속 요구.
+                        gpsLockCount = 0
+                    }
+                }
                 // Feeds DEM-cell lookup + fallback reference into AltitudeProvider.
                 altitudeProvider.pushGps(lat, lon, alt, sigma)
             }
@@ -402,14 +424,13 @@ class ExerciseService : Service() {
     fun startExercise() {
         Log.d(TAG, "Starting exercise from service")
 
-        // Begin barometer sampling for the in-app altitude loop.
-        // Cycling-only consumer today; gating here avoids the sensor stream cost
-        // during running (RUNNING does not read altitude from cyclingEngine).
-        // hasBarometer=false on Galaxy Watch 4 etc. → caller path still works,
-        // AltitudeProvider just stays silent (cyclingEngine.altitude untouched).
+        // CYCLING: GPS lock 까지 baro/altitude/cyclingEngine 시작 지연. Health Services는
+        // 시작해서 LOCATION 데이터를 받아야 lock 판정 가능 (chicken-and-egg 해소: session
+        // 자체는 시작, user-visible "active"는 lock 후).
+        // RUNNING: 트레드밀 자연 대응 — GPS 없이도 즉시 active.
         if (mode == ExerciseMode.CYCLING) {
-            val baroStarted = altitudeProvider.start()
-            Log.d(TAG, "AltitudeProvider start: baro=$baroStarted")
+            gpsLockCount = 0
+            _isWaitingGpsLock.value = true
         }
 
         // Ensure foreground service is started (needed for auto-start from BLE callback)
@@ -429,23 +450,14 @@ class ExerciseService : Service() {
                 val ok = exerciseManager.startExercise(ExerciseMode.CYCLING.toExerciseType())
                 if (ok) {
                     cyclingEngine.reset()
-                    cyclingEngine.start()
-                    _isRunning.value = true
-                    currentSessionId = UUID.randomUUID().toString()
-                    serviceScope.launch(Dispatchers.IO) {
-                        workoutDao.insertSession(
-                            WorkoutSession(
-                                sessionId = currentSessionId!!,
-                                startTime = System.currentTimeMillis(),
-                                exerciseType = "CYCLING"
-                            )
-                        )
-                        Log.d(TAG, "Created workout session: $currentSessionId (CYCLING)")
-                    }
-                    startTimer()
+                    // CYCLING: cyclingEngine.start() + _isRunning + timer는 GPS lock 후
+                    // activateCyclingAfterGpsLock()에서. Health Services LOCATION sample이
+                    // 들어와야 lock 판정 가능 — session 자체는 시작하되 user-visible "active"
+                    // 는 σ_v ≤ 15m × 3 sample 연속까지 보류.
                 } else {
                     Log.w(TAG, "Cycling start failed: BIKING unsupported or HS error")
                     _cyclingStartFailed.value = true
+                    _isWaitingGpsLock.value = false
                     // _isRunning stays false; no session row, no timer → no ghost session.
                     // Service is left foreground/idle; user retries or backs out
                     // (BackHandler → stopExercise) per spec §3.2.
@@ -478,6 +490,34 @@ class ExerciseService : Service() {
             // Start 1Hz timer
             startTimer()
         }
+    }
+
+    /**
+     * Cycling 모드 GPS lock 받은 후 user-visible "active" 전환.
+     * Health Services session은 이미 startExercise()에서 시작됨. 여기서 cyclingEngine.start +
+     * altitudeProvider.start + _isRunning + timer + DB session 생성을 모두 묶어서 처리.
+     * 한 번만 실행 (gpsLockCount는 activate 직후 재호출 방지로 충분히 큰 값 유지).
+     */
+    private fun activateCyclingAfterGpsLock() {
+        if (!_isWaitingGpsLock.value) return
+        _isWaitingGpsLock.value = false
+        Log.d(TAG, "GPS lock acquired — activating cycling")
+        val baroStarted = altitudeProvider.start()
+        Log.d(TAG, "AltitudeProvider start: baro=$baroStarted")
+        cyclingEngine.start()
+        _isRunning.value = true
+        currentSessionId = UUID.randomUUID().toString()
+        serviceScope.launch(Dispatchers.IO) {
+            workoutDao.insertSession(
+                WorkoutSession(
+                    sessionId = currentSessionId!!,
+                    startTime = System.currentTimeMillis(),
+                    exerciseType = "CYCLING"
+                )
+            )
+            Log.d(TAG, "Created workout session: $currentSessionId (CYCLING, post-GPS-lock)")
+        }
+        startTimer()
     }
 
     /**
@@ -520,6 +560,8 @@ class ExerciseService : Service() {
         if (mode == ExerciseMode.CYCLING) cyclingEngine.stop() else runningEngine.stop()
         _isRunning.value = false
         _isPaused.value = false
+        _isWaitingGpsLock.value = false
+        gpsLockCount = 0
         timerJob?.cancel()
 
         // Update session with summary stats and cleanup

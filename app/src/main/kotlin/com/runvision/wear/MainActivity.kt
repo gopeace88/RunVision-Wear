@@ -63,6 +63,7 @@ class MainActivity : ComponentActivity() {
     private val isRunning = mutableStateOf(false)
     private val isPaused = mutableStateOf(false)
     private val isAmbient = mutableStateOf(false)
+    private val isWaitingGpsLock = mutableStateOf(false)
 
     // Service binding (BLE auto-start logic moved to ExerciseService)
     private var exerciseService: ExerciseService? = null
@@ -162,6 +163,14 @@ class MainActivity : ComponentActivity() {
                 lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
                     exerciseService?.isPaused?.collect { paused ->
                         isPaused.value = paused
+                    }
+                }
+            }
+
+            lifecycleScope.launch {
+                lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                    exerciseService?.isWaitingGpsLock?.collect { waiting ->
+                        isWaitingGpsLock.value = waiting
                     }
                 }
             }
@@ -305,6 +314,7 @@ class MainActivity : ComponentActivity() {
                             metrics = cyclingMetrics.value,
                             isAmbient = isAmbient.value,
                             isPaused = isPaused.value,
+                            isWaitingGpsLock = isWaitingGpsLock.value,
                             onPauseClick = { togglePause() },
                             onStopClick = {
                                 stopRunning()

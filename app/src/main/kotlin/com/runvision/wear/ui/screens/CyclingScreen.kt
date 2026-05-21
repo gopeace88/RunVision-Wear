@@ -34,15 +34,52 @@ fun CyclingScreen(
     metrics: CyclingMetrics,
     isAmbient: Boolean = false,
     isPaused: Boolean = false,
+    isWaitingGpsLock: Boolean = false,
     onPauseClick: () -> Unit,
     onStopClick: () -> Unit,
     onScreenTouch: () -> Unit = {},
     connectionState: RLensConnection.ConnectionState = RLensConnection.ConnectionState.CONNECTED
 ) {
-    if (isAmbient) {
+    if (isWaitingGpsLock) {
+        GpsSearchingScreen(onStopClick)
+    } else if (isAmbient) {
         AmbientCyclingScreen(metrics)
     } else {
         InteractiveCyclingScreen(metrics, isPaused, onPauseClick, onStopClick, onScreenTouch, connectionState)
+    }
+}
+
+@Composable
+private fun GpsSearchingScreen(onCancelClick: () -> Unit) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+            .padding(16.dp),
+    ) {
+        Text(
+            text = "GPS 검색 중...",
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color(0xFFFF9800),
+            textAlign = TextAlign.Center,
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = "야외에서 GPS 신호를\n확보하면 자동으로 시작합니다.",
+            fontSize = 12.sp,
+            color = Color.LightGray,
+            textAlign = TextAlign.Center,
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        Button(
+            onClick = onCancelClick,
+            colors = ButtonDefaults.secondaryButtonColors(),
+        ) {
+            Text(text = "취소", fontSize = 14.sp)
+        }
     }
 }
 
