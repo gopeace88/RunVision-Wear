@@ -219,21 +219,23 @@ class MainActivity : ComponentActivity() {
                 val nav = rememberSwipeDismissableNavController()
                 navController = nav
 
-                // Navigate to running screen if service is already running
-                // This handles activity recreation (screen on/off)
+                // Navigate to running/cycling screen if service active OR cycling is
+                // currently in GPS-lock-waiting state (so user sees GpsSearchingScreen
+                // instead of being stuck on Home with the BLE status line).
+                // Codex review P2 fix — previously navigate only triggered on isRunning=true.
                 val currentIsRunning = isRunning.value
-                Log.d(TAG, "Compose: currentIsRunning=$currentIsRunning")
+                val currentIsWaitingGpsLock = isWaitingGpsLock.value
+                Log.d(TAG, "Compose: currentIsRunning=$currentIsRunning waitGps=$currentIsWaitingGpsLock")
 
-                LaunchedEffect(currentIsRunning) {
-                    Log.d(TAG, "LaunchedEffect triggered: isRunning=$currentIsRunning")
-                    if (currentIsRunning) {
+                LaunchedEffect(currentIsRunning, currentIsWaitingGpsLock) {
+                    if (currentIsRunning || currentIsWaitingGpsLock) {
                         // Small delay to ensure navigation is fully initialized
                         kotlinx.coroutines.delay(100)
                         val currentRoute = nav.currentBackStackEntry?.destination?.route
                         Log.d(TAG, "LaunchedEffect: currentRoute=$currentRoute")
                         if (currentRoute == "home" || currentRoute == null) {
                             val dest = if (exerciseService?.activeMode == ExerciseMode.CYCLING) "cycling" else "running"
-                            Log.d(TAG, "Navigating to $dest screen (service already running)")
+                            Log.d(TAG, "Navigating to $dest screen (running=$currentIsRunning, waitGps=$currentIsWaitingGpsLock)")
                             nav.navigate(dest) {
                                 popUpTo("home") { inclusive = false }
                             }
