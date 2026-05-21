@@ -230,10 +230,12 @@ class AltitudeProvider(
     @Volatile private var lastGpsAltWgs84: Double? = null
     @Volatile private var lastGpsVerticalSigma: Double? = null
 
-    // GPS anchor accumulator. tLastRecalMs == 0L 인 동안만 채워짐 (첫 anchor 확보 전).
-    // 첫 reference (DEM cache hit 또는 weighted GPS anchor) 확보 시 reanchor + clear.
+    // GPS anchor accumulator. hasAnchoredThisSession == false 인 동안만 채워짐.
+    // 첫 reference (DEM cache hit 또는 weighted GPS anchor) 확보 시 reanchor + clear + flag=true.
+    // session-local flag (persisted X) — 이전 세션의 tLastRecalMs로 판정 시 새 위치에서 reanchor 못 함.
     private val anchorSamples = ArrayDeque<GpsAnchorSample>()
     private val anchorBufferCap = 20
+    @Volatile private var hasAnchoredThisSession: Boolean = false
 
     /** Latest fused altitude (MSL if DEM was used, ellipsoid otherwise). Null until first sample. */
     @Volatile private var lastFusedM: Double? = null
@@ -269,6 +271,10 @@ class AltitudeProvider(
             Log.w(TAG, "No TYPE_PRESSURE sensor available — caller should use GPS altitude as-is")
             return false
         }
+        // session-local anchor state reset — 이전 세션 buffer가 새 위치 sample과 섞이면
+        // 잘못된 weighted altitude로 reanchor.
+        synchronized(anchorSamples) { anchorSamples.clear() }
+        hasAnchoredThisSession = false
         sensorManager.registerListener(listener, pressureSensor, SensorManager.SENSOR_DELAY_NORMAL)
         Log.d(TAG, "AltitudeProvider started (state=${state})")
         return true
@@ -294,8 +300,9 @@ class AltitudeProvider(
         lastGpsAltWgs84 = cleanAlt
         lastGpsVerticalSigma = cleanSigma
         // Accumulate weighted-anchor samples until first reference is acquired.
-        // After reanchor (tLastRecalMs > 0) we stop collecting — buffer no longer needed.
-        if (state.tLastRecalMs == 0L && cleanAlt != null && cleanSigma != null) {
+        // Quality gate: σ_v ≤ SIGMA_GPS_GATE — poor indoor/cold-start GPS가 baseline 영구 skew
+        // 방지. normal reference path와 동일 gate 적용.
+        if (!hasAnchoredThisSession && cleanAlt != null && cleanSigma != null && cleanSigma <= SIGMA_GPS_GATE) {
             synchronized(anchorSamples) {
                 anchorSamples.addLast(GpsAnchorSample(cleanAlt, cleanSigma))
                 while (anchorSamples.size > anchorBufferCap) anchorSamples.removeFirst()
@@ -303,7 +310,7 @@ class AltitudeProvider(
         }
         // Pre-warm DEM cache (network OK before first anchor — user expects phone-connected
         // warm-up). After first anchor, lookup() is called with fetchOnMiss=false; no fetch.
-        if (state.tLastRecalMs == 0L) {
+        if (!hasAnchoredThisSession) {
             fetchJob?.cancel()
             fetchJob = scope.launch { elevation.fetchAsync(lat, lon) }
         }
@@ -323,7 +330,9 @@ class AltitudeProvider(
             //    the FINE+10min recal gate so the user sees a sensible baseline
             //    immediately instead of after 30+ min of slow loop convergence.
             //    Priority: DEM cache hit > weighted GPS anchor (15+ samples).
-            if (s.tLastRecalMs == 0L && lastLat != null && lastLon != null) {
+            //    Gate by session-local flag (not persisted tLastRecalMs) so a new
+            //    workout at a new location can re-anchor even if old recal timestamp survives.
+            if (!hasAnchoredThisSession && lastLat != null && lastLon != null) {
                 val initialRef: Double? = elevation.lookup(lastLat!!, lastLon!!, fetchOnMiss = true)
                     ?: synchronized(anchorSamples) {
                         weightedGpsAnchor(anchorSamples.toList())?.altitudeMeters
@@ -332,6 +341,7 @@ class AltitudeProvider(
                     s = reanchorForInitialReference(s, pPa, initialRef, nowMsForAnchor)
                     state = s
                     synchronized(anchorSamples) { anchorSamples.clear() }
+                    hasAnchoredThisSession = true
                     Log.d(TAG, "Initial reanchor: pBase=${s.pBasePa} refAlt=$initialRef")
                 }
             }
@@ -340,7 +350,7 @@ class AltitudeProvider(
             val hB = T0 / L * (1.0 - (pPa / s.pBasePa).pow(1.0 / EXP))
 
             // 2) Pick reference. After first anchor: cache-only — no network round trips.
-            val ref = pickReference(cacheOnly = s.tLastRecalMs > 0L)
+            val ref = pickReference(cacheOnly = hasAnchoredThisSession)
             val hRef = ref?.first
             val sigmaRef = ref?.second
             val refSource = when {
