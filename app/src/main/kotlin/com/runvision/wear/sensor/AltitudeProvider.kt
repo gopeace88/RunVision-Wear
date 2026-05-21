@@ -56,6 +56,18 @@ class AltitudeProvider(
     private val elevation: ElevationLookup = ElevationLookup(),
 ) {
 
+    /** Inverse-variance weighted anchor input. σ는 GPS verticalAccuracy(m).
+     *  Nested at class level (not companion) so `AltitudeProvider.GpsAnchorSample` works from outside. */
+    data class GpsAnchorSample(
+        val altitudeMeters: Double,
+        val verticalSigmaMeters: Double,
+    )
+    /** weightedGpsAnchor result + 첫 anchor 시점 mode hint. */
+    data class GpsAnchor(
+        val altitudeMeters: Double,
+        val stateMode: Int,
+    )
+
     companion object {
         private const val TAG = "AltitudeProvider"
         private const val PREFS_NAME = "altitude_provider_prefs"
@@ -86,6 +98,64 @@ class AltitudeProvider(
         // Refuse degenerate dt (sensor backpressure / wakeup race).
         private const val MAX_DT_S = 5.0
         private const val MIN_DT_S = 0.05
+        // Initial anchor: need this many GPS samples before weighted-mean anchor is trusted.
+        // Below threshold → weightedGpsAnchor returns null, caller keeps accumulating.
+        const val GPS_ANCHOR_MIN_SAMPLES = 15
+
+        /**
+         * Inverse-variance weighted mean of accumulated GPS samples.
+         * Returns null until [GPS_ANCHOR_MIN_SAMPLES] samples are collected
+         * (cold-start GPS noise floor too high before then).
+         *
+         * mean = Σ(altᵢ / σᵢ²) / Σ(1 / σᵢ²)
+         *
+         * Lower-σ samples dominate — late high-quality fix outweighs early noisy ones.
+         */
+        fun weightedGpsAnchor(samples: List<GpsAnchorSample>): GpsAnchor? {
+            if (samples.size < GPS_ANCHOR_MIN_SAMPLES) return null
+            var sumWx = 0.0
+            var sumW = 0.0
+            for (s in samples) {
+                if (!s.altitudeMeters.isFinite() || !s.verticalSigmaMeters.isFinite() || s.verticalSigmaMeters <= 0.0) continue
+                val w = 1.0 / (s.verticalSigmaMeters * s.verticalSigmaMeters)
+                sumWx += w * s.altitudeMeters
+                sumW += w
+            }
+            if (sumW <= 0.0 || !sumW.isFinite()) return null
+            return GpsAnchor(altitudeMeters = sumWx / sumW, stateMode = AltitudeState.MODE_COARSE)
+        }
+
+        /**
+         * Hard-reset baseline against a freshly-acquired reference altitude.
+         * Used **once per session** when the first valid reference (DEM cache hit
+         * or GPS weighted anchor) is acquired — bypasses the 10-min FINE-mode
+         * recal gate so the user sees a correct baseline immediately.
+         *
+         * Pure transform of state (mirrors the live re-anchor block in onSample).
+         * X1/X2/U=0 reset, P_base computed so that ISA(pressurePa, newPBase) = referenceAltitudeMeters.
+         */
+        fun reanchorForInitialReference(
+            state: AltitudeState,
+            pressurePa: Double,
+            referenceAltitudeMeters: Double,
+            nowMs: Long,
+        ): AltitudeState {
+            val base = 1.0 - referenceAltitudeMeters * L / T0
+            val newPBase = if (base > 0.0 && base.isFinite()) pressurePa / base.pow(EXP) else state.pBasePa
+            return state.copy(
+                x1 = 0.0,
+                x2 = 0.0,
+                u = 0.0,
+                pBasePa = newPBase,
+                mode = AltitudeState.MODE_COARSE,
+                tLastRecalMs = nowMs,
+            )
+        }
+
+        /** ISA baro altitude. Exposed for unit testing the re-anchor round-trip. */
+        fun baroAltitudeMeters(pressurePa: Double, pBasePa: Double): Double {
+            return T0 / L * (1.0 - (pressurePa / pBasePa).pow(1.0 / EXP))
+        }
 
         /**
          * Pure step of the two-state loop. Exposed for unit testing.
@@ -160,6 +230,11 @@ class AltitudeProvider(
     @Volatile private var lastGpsAltWgs84: Double? = null
     @Volatile private var lastGpsVerticalSigma: Double? = null
 
+    // GPS anchor accumulator. tLastRecalMs == 0L 인 동안만 채워짐 (첫 anchor 확보 전).
+    // 첫 reference (DEM cache hit 또는 weighted GPS anchor) 확보 시 reanchor + clear.
+    private val anchorSamples = ArrayDeque<GpsAnchorSample>()
+    private val anchorBufferCap = 20
+
     /** Latest fused altitude (MSL if DEM was used, ellipsoid otherwise). Null until first sample. */
     @Volatile private var lastFusedM: Double? = null
     fun currentAltitudeM(): Double? = lastFusedM
@@ -214,11 +289,24 @@ class AltitudeProvider(
     fun pushGps(lat: Double, lon: Double, gpsAltMeters: Double?, verticalSigma: Double?) {
         lastLat = lat
         lastLon = lon
-        lastGpsAltWgs84 = gpsAltMeters?.takeIf { it.isFinite() && it > -1000.0 && it < 10000.0 }
-        lastGpsVerticalSigma = verticalSigma?.takeIf { it.isFinite() && it > 0.0 }
-        // Pre-warm DEM cache; idempotent + dedupes per cell.
-        fetchJob?.cancel()
-        fetchJob = scope.launch { elevation.fetchAsync(lat, lon) }
+        val cleanAlt = gpsAltMeters?.takeIf { it.isFinite() && it > -1000.0 && it < 10000.0 }
+        val cleanSigma = verticalSigma?.takeIf { it.isFinite() && it > 0.0 }
+        lastGpsAltWgs84 = cleanAlt
+        lastGpsVerticalSigma = cleanSigma
+        // Accumulate weighted-anchor samples until first reference is acquired.
+        // After reanchor (tLastRecalMs > 0) we stop collecting — buffer no longer needed.
+        if (state.tLastRecalMs == 0L && cleanAlt != null && cleanSigma != null) {
+            synchronized(anchorSamples) {
+                anchorSamples.addLast(GpsAnchorSample(cleanAlt, cleanSigma))
+                while (anchorSamples.size > anchorBufferCap) anchorSamples.removeFirst()
+            }
+        }
+        // Pre-warm DEM cache (network OK before first anchor — user expects phone-connected
+        // warm-up). After first anchor, lookup() is called with fetchOnMiss=false; no fetch.
+        if (state.tLastRecalMs == 0L) {
+            fetchJob?.cancel()
+            fetchJob = scope.launch { elevation.fetchAsync(lat, lon) }
+        }
     }
 
     // --- core loop --------------------------------------------------------
@@ -227,14 +315,32 @@ class AltitudeProvider(
         val dt = computeDt(eventNanos) ?: return
 
         synchronized(this) {
-            val s = state
+            var s = state
             val pPa = pressureHpa * 100.0
+            val nowMsForAnchor = System.currentTimeMillis()
+
+            // 0) Initial reference acquisition (one-shot per session). Bypasses
+            //    the FINE+10min recal gate so the user sees a sensible baseline
+            //    immediately instead of after 30+ min of slow loop convergence.
+            //    Priority: DEM cache hit > weighted GPS anchor (15+ samples).
+            if (s.tLastRecalMs == 0L && lastLat != null && lastLon != null) {
+                val initialRef: Double? = elevation.lookup(lastLat!!, lastLon!!, fetchOnMiss = true)
+                    ?: synchronized(anchorSamples) {
+                        weightedGpsAnchor(anchorSamples.toList())?.altitudeMeters
+                    }
+                if (initialRef != null && initialRef.isFinite() && kotlin.math.abs(initialRef) < 10000.0) {
+                    s = reanchorForInitialReference(s, pPa, initialRef, nowMsForAnchor)
+                    state = s
+                    synchronized(anchorSamples) { anchorSamples.clear() }
+                    Log.d(TAG, "Initial reanchor: pBase=${s.pBasePa} refAlt=$initialRef")
+                }
+            }
 
             // 1) Provisional baro altitude (ISA).
             val hB = T0 / L * (1.0 - (pPa / s.pBasePa).pow(1.0 / EXP))
 
-            // 2) Pick reference.
-            val ref = pickReference()
+            // 2) Pick reference. After first anchor: cache-only — no network round trips.
+            val ref = pickReference(cacheOnly = s.tLastRecalMs > 0L)
             val hRef = ref?.first
             val sigmaRef = ref?.second
             val refSource = when {
@@ -300,11 +406,11 @@ class AltitudeProvider(
         return dt
     }
 
-    private fun pickReference(): Pair<Double, Double>? {
+    private fun pickReference(cacheOnly: Boolean = false): Pair<Double, Double>? {
         val lat = lastLat
         val lon = lastLon
         if (lat != null && lon != null) {
-            val dem = elevation.lookup(lat, lon)
+            val dem = elevation.lookup(lat, lon, fetchOnMiss = !cacheOnly)
             if (dem != null) return dem to SIGMA_DEM
         }
         val gAlt = lastGpsAltWgs84

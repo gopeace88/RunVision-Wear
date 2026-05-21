@@ -1,10 +1,11 @@
 package com.runvision.wear.sensor
 
+import com.runvision.wear.network.ElevationLookup
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import kotlin.math.abs
 
 /**
  * Step-response sanity check for the two-state loop math.
@@ -76,5 +77,52 @@ class AltitudeProviderStepTest {
         val (next, _) = AltitudeProvider.step(s, hB = 102.0, hRef = 100.0, sigmaRef = 5.0, dt = 1.0)
         // |U + ΔH| = |0 + 2| = 2 < ALPHA(3)·σ(5) = 15 → should switch to FINE.
         assertEquals(AltitudeState.MODE_FINE, next.mode)
+    }
+
+    @Test
+    fun `weightedGpsAnchor waits for startup sample target and favors lower sigma`() {
+        val early = List(14) { idx ->
+            AltitudeProvider.GpsAnchorSample(altitudeMeters = 100.0 + idx, verticalSigmaMeters = 5.0)
+        }
+        assertNull(AltitudeProvider.weightedGpsAnchor(early))
+
+        val samples = List(14) {
+            AltitudeProvider.GpsAnchorSample(altitudeMeters = 100.0, verticalSigmaMeters = 10.0)
+        } + AltitudeProvider.GpsAnchorSample(altitudeMeters = 80.0, verticalSigmaMeters = 2.0)
+
+        val anchor = AltitudeProvider.weightedGpsAnchor(samples)
+        // Inverse-variance weighted mean (standard statistical weighting):
+        //   numer = 14·100·(1/100) + 80·(1/4) = 14 + 20 = 34
+        //   denom = 14·(1/100) + 1/4 = 0.14 + 0.25 = 0.39
+        //   mean  = 34 / 0.39 = 87.179...
+        assertEquals(87.18, anchor!!.altitudeMeters, 0.01)
+        assertEquals(AltitudeState.MODE_COARSE, anchor.stateMode)
+    }
+
+    @Test
+    fun `initial reference reanchor resets correction state and maps pressure to reference altitude`() {
+        val state = AltitudeState(x1 = 8.0, x2 = 3.0, u = -4.0, pBasePa = 101325.0, mode = AltitudeState.MODE_FINE)
+
+        val next = AltitudeProvider.reanchorForInitialReference(
+            state = state,
+            pressurePa = 100000.0,
+            referenceAltitudeMeters = 77.0,
+            nowMs = 1234L,
+        )
+
+        assertEquals(0.0, next.x1, 0.0)
+        assertEquals(0.0, next.x2, 0.0)
+        assertEquals(0.0, next.u, 0.0)
+        assertEquals(AltitudeState.MODE_COARSE, next.mode)
+        assertEquals(1234L, next.tLastRecalMs)
+        val hB = AltitudeProvider.baroAltitudeMeters(pressurePa = 100000.0, pBasePa = next.pBasePa)
+        assertEquals(77.0, hB, 1e-6)
+    }
+
+    @Test
+    fun `elevation lookup can be cache only during a session`() {
+        val lookup = ElevationLookup()
+
+        assertNull(lookup.lookup(lat = 37.25, lon = 127.07, fetchOnMiss = false))
     }
 }

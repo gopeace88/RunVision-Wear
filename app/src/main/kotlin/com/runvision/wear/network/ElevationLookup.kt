@@ -48,8 +48,13 @@ class ElevationLookup {
      * Synchronous cache lookup. Returns null if the cell isn't fetched yet.
      * Callers are expected to invoke [fetchAsync] separately so the next sample
      * sees the value populated. Never blocks on the network.
+     *
+     * @param fetchOnMiss true(default): caller may follow with [fetchAsync]. false:
+     * cache-only mode — used after session anchor 확보 so network round-trips don't
+     * leak power on a phone-free workout. The flag itself doesn't trigger fetches
+     * (fetchAsync is suspend); it's a contract hint the caller uses to decide.
      */
-    fun lookup(lat: Double, lon: Double): Double? {
+    fun lookup(lat: Double, lon: Double, fetchOnMiss: Boolean = true): Double? {
         val key = cellKey(lat, lon)
         return cache[key]
     }
