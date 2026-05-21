@@ -204,10 +204,14 @@ class ExerciseService : Service() {
                 // "GPS 검색 중" 갇히는 것보다 실용. 실내 창가도 좌표 잡히면 lock 가능한
                 // trade-off는 사용자가 cancel로 회피.
                 if (mode == ExerciseMode.CYCLING && _isWaitingGpsLock.value) {
+                    // lock gate = GPS 좌표(LOCATION sample)가 들어오는 것 자체. 이 callback이
+                    // 호출됐다는 건 Health Services가 GPS fix를 emit했다는 신호.
+                    // Galaxy Watch 6는 altitude=Double.MAX_VALUE(sentinel→null) + σ_v 미제공(null)
+                    // 이라 alt/sigma 기반 gate는 영원히 false였음. quality(σ_v ≤ 15m)는 baseline
+                    // anchor가 별도 처리하므로 lock 자체는 좌표만으로 충분.
                     val validSample = when {
-                        sigma != null && sigma > 0.0 && sigma <= gpsLockSigmaGate -> true
-                        sigma == null && alt != null && alt.isFinite() -> true
-                        else -> false
+                        sigma != null && sigma > 0.0 -> sigma <= gpsLockSigmaGate
+                        else -> true  // σ_v 미제공(Galaxy) → 좌표 fix만으로 lock
                     }
                     if (validSample) {
                         gpsLockCount++
