@@ -198,10 +198,20 @@ class ExerciseService : Service() {
             }
             onGpsForAltitudeUpdate = { lat, lon, alt, sigma ->
                 // GPS lock gate (CYCLING only). σ_v ≤ 15m × 3 sample 연속 → activate.
+                // Galaxy Watch 6 / Wear OS 6의 Health Services LocationData가
+                // verticalPositionErrorMeters 메서드 미제공 → sigma=null. 그럴 땐 valid
+                // altitude(GPS lock 자체는 들어오는 신호)만으로 lock count 인정 — 영원히
+                // "GPS 검색 중" 갇히는 것보다 실용. 실내 창가도 좌표 잡히면 lock 가능한
+                // trade-off는 사용자가 cancel로 회피.
                 if (mode == ExerciseMode.CYCLING && _isWaitingGpsLock.value) {
-                    if (sigma != null && sigma > 0.0 && sigma <= gpsLockSigmaGate) {
+                    val validSample = when {
+                        sigma != null && sigma > 0.0 && sigma <= gpsLockSigmaGate -> true
+                        sigma == null && alt != null && alt.isFinite() -> true
+                        else -> false
+                    }
+                    if (validSample) {
                         gpsLockCount++
-                        Log.d(TAG, "GPS lock progress: $gpsLockCount/$gpsLockRequiredSamples (σ_v=$sigma)")
+                        Log.d(TAG, "GPS lock progress: $gpsLockCount/$gpsLockRequiredSamples (σ_v=$sigma alt=$alt)")
                         if (gpsLockCount >= gpsLockRequiredSamples) {
                             activateCyclingAfterGpsLock()
                         }
