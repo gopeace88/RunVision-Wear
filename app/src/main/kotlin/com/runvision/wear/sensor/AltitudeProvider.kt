@@ -351,6 +351,14 @@ class AltitudeProvider(
             // 1) Provisional baro altitude (ISA).
             val hB = T0 / L * (1.0 - (pPa / s.pBasePa).pow(1.0 / EXP))
 
+            // hB가 sensor garbage(NaN/Inf 또는 |hB|>=12000m, 예: 손상된 baseline)면 이번 sample은
+            // 학습·publish를 모두 건너뜀 → 거짓 0m/극단값을 HUD·rLens로 내보내지 않고 직전 고도(lastFusedM)
+            // 유지. step()의 0.0 센티넬이 valid 고도처럼 전파되던 문제 해소.
+            if (!hB.isFinite() || kotlin.math.abs(hB) >= 12000.0) {
+                Log.w(TAG, "Invalid hB=$hB — skipping altitude publish (holding last=$lastFusedM)")
+                return@synchronized
+            }
+
             // 2) Pick reference. After first anchor: cache-only — no network round trips.
             val ref = pickReference(cacheOnly = hasAnchoredThisSession)
             val hRef = ref?.first
