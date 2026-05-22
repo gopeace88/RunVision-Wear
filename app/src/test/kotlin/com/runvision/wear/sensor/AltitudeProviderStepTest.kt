@@ -62,6 +62,18 @@ class AltitudeProviderStepTest {
     }
 
     @Test
+    fun `non-finite hB never propagates NaN or Inf to output`() {
+        // Regression: the sanity guard must not emit hB + u when hB is garbage,
+        // otherwise NaN/Inf flows into the fused altitude. State must be untouched.
+        val s = AltitudeState(x1 = 1.0, x2 = 2.0, u = 3.0)
+        for (bad in listOf(Double.NaN, Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY)) {
+            val (next, out) = AltitudeProvider.step(s, hB = bad, hRef = 100.0, sigmaRef = 5.0, dt = 1.0)
+            assertTrue("output must be finite for hB=$bad, got $out", out.isFinite())
+            assertEquals("garbage hB must not mutate state", s, next)
+        }
+    }
+
+    @Test
     fun `null reference leaves state untouched and emits hB plus U`() {
         val s = AltitudeState(x1 = 1.0, x2 = 2.0, u = 3.5)
         val (next, out) = AltitudeProvider.step(s, hB = 100.0, hRef = null, sigmaRef = null, dt = 1.0)
