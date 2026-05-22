@@ -57,12 +57,19 @@ class RLensConnection(
         override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
             when (newState) {
                 BluetoothProfile.STATE_CONNECTED -> {
-                    Log.d(TAG, "Connected to GATT server")
-                    reconnectAttempts = 0
-                    gatt.discoverServices()
+                    if (status == BluetoothGatt.GATT_SUCCESS) {
+                        Log.d(TAG, "Connected to GATT server")
+                        reconnectAttempts = 0
+                        gatt.discoverServices()
+                    } else {
+                        // status≠SUCCESS인 CONNECTED = 실패한 연결. 깨진 링크에서 discoverServices
+                        // 하지 말고 기존 disconnect→재연결 복구 경로로 보냄.
+                        Log.e(TAG, "STATE_CONNECTED but status=$status — failed connect, recovering")
+                        gatt.disconnect()
+                    }
                 }
                 BluetoothProfile.STATE_DISCONNECTED -> {
-                    Log.d(TAG, "Disconnected from GATT server")
+                    Log.d(TAG, "Disconnected from GATT server (status=$status)")
                     exerciseCharacteristic = null
                     onConnectionStateChanged(ConnectionState.DISCONNECTED)
                     scheduleReconnect()
