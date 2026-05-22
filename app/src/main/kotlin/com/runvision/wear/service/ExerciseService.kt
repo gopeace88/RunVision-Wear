@@ -417,6 +417,10 @@ class ExerciseService : Service() {
         rLensConnection?.disconnect()
         rLensConnection = null
 
+        // AltitudeProvider 정리 — stopExercise를 거치지 않고 onDestroy로 직행하는 경로(시스템 회수
+        // 등)에서도 sensor listener·DEM fetch·scope가 누수되지 않도록.
+        if (this::altitudeProvider.isInitialized) altitudeProvider.stop()
+
         // Release wake lock
         releaseWakeLock()
     }

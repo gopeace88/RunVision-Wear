@@ -11,6 +11,7 @@ import com.runvision.wear.network.ElevationLookup
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -217,7 +218,8 @@ class AltitudeProvider(
     private val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
     private val pressureSensor: Sensor? = sensorManager.getDefaultSensor(Sensor.TYPE_PRESSURE)
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    // stop()에서 cancel, start()에서 재생성(서비스가 인스턴스를 워크아웃마다 재사용).
+    private var scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     /** True if this device has a barometer. Callers degrade to GPS-only when false. */
     val hasBarometer: Boolean = pressureSensor != null
@@ -277,6 +279,10 @@ class AltitudeProvider(
         // 잘못된 weighted altitude로 reanchor.
         synchronized(anchorSamples) { anchorSamples.clear() }
         hasAnchoredThisSession = false
+        // 이전 stop()에서 취소된 scope를 새로 생성(DEM fetch 재사용 가능하게).
+        // cancel 후 재생성 — 이미 취소됐으면 no-op, 살아있으면 누수 없이 교체.
+        scope.cancel()
+        scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         sensorManager.registerListener(listener, pressureSensor, SensorManager.SENSOR_DELAY_NORMAL)
         Log.d(TAG, "AltitudeProvider started (state=${state})")
         return true
@@ -284,6 +290,11 @@ class AltitudeProvider(
 
     fun stop() {
         sensorManager.unregisterListener(listener)
+        // DEM fetch 및 scope 취소 — 미취소 시 in-flight 네트워크 fetch가 provider(→context)를
+        // 붙들어 process 종료까지 누수.
+        fetchJob?.cancel()
+        fetchJob = null
+        scope.cancel()
         persist()
         Log.d(TAG, "AltitudeProvider stopped (state=${state})")
     }
