@@ -150,15 +150,20 @@ class RLensConnection(
      * Connect to rLens device
      */
     fun connect(device: BluetoothDevice) {
-        lastDevice = device
-        intentionalDisconnect = false   // 새 연결: 이후 drop은 재연결 대상
-        onConnectionStateChanged(ConnectionState.CONNECTING)
-        // 재연결 경로(scheduleReconnect→connect)는 STATE_DISCONNECTED 후에도 gatt를 닫지 않아
-        // 매 재연결마다 BluetoothGatt 핸들이 누수됨(Android ~30개 한계 → status 133). 새 인스턴스
-        // 생성 직전 이전 것을 close. close→재할당 순서라 방금 만든 인스턴스를 닫을 위험 없음.
-        // disconnect() 후엔 gatt=null이라 이중 close도 발생하지 않음.
-        gatt?.close()
-        gatt = device.connectGatt(context, false, gattCallback, BluetoothDevice.TRANSPORT_LE)
+        // connect()는 스캐너 binder 스레드(onScanResult→onDeviceFound)와 main(재연결)에서 모두
+        // 호출됨. 본문을 main looper로 옮겨 lastDevice/gatt 필드 쓰기를 단일 스레드로 통일
+        // ("모든 GATT 상태 변경은 main" 불변식 완성).
+        handler.post {
+            lastDevice = device
+            intentionalDisconnect = false   // 새 연결: 이후 drop은 재연결 대상
+            onConnectionStateChanged(ConnectionState.CONNECTING)
+            // 재연결 경로(scheduleReconnect→connect)는 STATE_DISCONNECTED 후에도 gatt를 닫지 않아
+            // 매 재연결마다 BluetoothGatt 핸들이 누수됨(Android ~30개 한계 → status 133). 새 인스턴스
+            // 생성 직전 이전 것을 close. close→재할당 순서라 방금 만든 인스턴스를 닫을 위험 없음.
+            // disconnect() 후엔 gatt=null이라 이중 close도 발생하지 않음.
+            gatt?.close()
+            gatt = device.connectGatt(context, false, gattCallback, BluetoothDevice.TRANSPORT_LE)
+        }
     }
 
     /**
