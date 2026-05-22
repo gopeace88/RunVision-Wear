@@ -53,63 +53,75 @@ class RLensConnection(
     private var reconnectAttempts = 0
     private val handler = Handler(Looper.getMainLooper())
 
+    // 의도적 disconnect 표시. disconnect() 후 늦게 도착하는 STATE_DISCONNECTED 콜백이
+    // scheduleReconnect()로 좀비 재연결을 거는 것 방지.
+    @Volatile private var intentionalDisconnect = false
+
+    // Threading 모델: 모든 GATT 콜백 본문은 handler(main looper)로 post되어 메인 스레드에서만
+    // 실행됨. 따라서 writeQueue/isWriting/reconnectAttempts/lastWriteTime 및 onConnectionStateChanged
+    // 호출은 (sendMetrics/processWriteQueue도 main에서 호출되므로) 단일 스레드로 직렬화됨 — 별도 락 불필요.
+
     private val gattCallback = object : BluetoothGattCallback() {
+        // 모든 콜백 본문을 handler.post로 main looper에서 실행 → 공유 상태 단일 스레드 직렬화.
         override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
-            when (newState) {
-                BluetoothProfile.STATE_CONNECTED -> {
-                    if (status == BluetoothGatt.GATT_SUCCESS) {
-                        Log.d(TAG, "Connected to GATT server")
-                        // reconnectAttempts 리셋은 여기(저수준 링크 CONNECTED)가 아니라 exercise
-                        // characteristic 발견 후 CONNECTED emit 시점(onServicesDiscovered)에서 함.
-                        // discovery/characteristic이 지속 실패하면 매 사이클 1로 리셋돼 5s 빠른
-                        // 재연결만 무한 반복(60s 백오프 도달 못 함)하던 문제 방지.
-                        // discoverServices()가 false면 초기화 실패 → onServicesDiscovered 콜백이
-                        // 보장되지 않아 CONNECTING에 고착. 같은 복구 경로(disconnect→재연결)로 보냄.
-                        if (!gatt.discoverServices()) {
-                            Log.e(TAG, "discoverServices() initiation failed — recovering")
+            handler.post {
+                when (newState) {
+                    BluetoothProfile.STATE_CONNECTED -> {
+                        if (status == BluetoothGatt.GATT_SUCCESS) {
+                            Log.d(TAG, "Connected to GATT server")
+                            // reconnectAttempts 리셋은 여기가 아니라 exercise characteristic 발견 시점.
+                            // discoverServices()가 false면 콜백이 보장되지 않아 CONNECTING 고착 →
+                            // 동일 복구 경로(disconnect→재연결)로 보냄.
+                            if (!gatt.discoverServices()) {
+                                Log.e(TAG, "discoverServices() initiation failed — recovering")
+                                gatt.disconnect()
+                            }
+                        } else {
+                            // status≠SUCCESS인 CONNECTED = 실패한 연결. 깨진 링크에서 discover 금지.
+                            Log.e(TAG, "STATE_CONNECTED but status=$status — failed connect, recovering")
                             gatt.disconnect()
                         }
-                    } else {
-                        // status≠SUCCESS인 CONNECTED = 실패한 연결. 깨진 링크에서 discoverServices
-                        // 하지 말고 기존 disconnect→재연결 복구 경로로 보냄.
-                        Log.e(TAG, "STATE_CONNECTED but status=$status — failed connect, recovering")
-                        gatt.disconnect()
                     }
-                }
-                BluetoothProfile.STATE_DISCONNECTED -> {
-                    Log.d(TAG, "Disconnected from GATT server (status=$status)")
-                    exerciseCharacteristic = null
-                    onConnectionStateChanged(ConnectionState.DISCONNECTED)
-                    scheduleReconnect()
+                    BluetoothProfile.STATE_DISCONNECTED -> {
+                        Log.d(TAG, "Disconnected from GATT server (status=$status)")
+                        exerciseCharacteristic = null
+                        if (intentionalDisconnect) {
+                            // 앱이 의도적으로 끊음 → 재연결 금지(좀비 재연결 방지).
+                            Log.d(TAG, "Intentional disconnect — skip reconnect")
+                            return@post
+                        }
+                        onConnectionStateChanged(ConnectionState.DISCONNECTED)
+                        scheduleReconnect()
+                    }
                 }
             }
         }
 
         override fun onServicesDiscovered(gatt: BluetoothGatt, status: Int) {
-            if (status == BluetoothGatt.GATT_SUCCESS) {
-                // Get Exercise Data characteristic (v1.0.2: 5개 메트릭만 전송)
-                val exerciseService = gatt.getService(RLensProtocol.EXERCISE_SERVICE_UUID)
-                exerciseCharacteristic = exerciseService?.getCharacteristic(RLensProtocol.EXERCISE_DATA_UUID)
+            handler.post {
+                if (status == BluetoothGatt.GATT_SUCCESS) {
+                    // Get Exercise Data characteristic (v1.0.2: 5개 메트릭만 전송)
+                    val exerciseService = gatt.getService(RLensProtocol.EXERCISE_SERVICE_UUID)
+                    exerciseCharacteristic = exerciseService?.getCharacteristic(RLensProtocol.EXERCISE_DATA_UUID)
 
-                if (exerciseCharacteristic != null) {
-                    Log.d(TAG, "Exercise characteristic found")
-                    // 연결이 실제로 사용 가능해진 시점에만 백오프 카운터 리셋.
-                    reconnectAttempts = 0
+                    if (exerciseCharacteristic != null) {
+                        Log.d(TAG, "Exercise characteristic found")
+                        // 연결이 실제로 사용 가능해진 시점에만 백오프 카운터 리셋.
+                        reconnectAttempts = 0
 
-                    // LOW_POWER: 100~500ms 간격 → 5초 전송 주기에서 rLens 라디오 절감 최대화
-                    val priorityResult = gatt.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_LOW_POWER)
-                    Log.d(TAG, "Requested CONNECTION_PRIORITY_LOW_POWER: $priorityResult")
+                        // LOW_POWER: 100~500ms 간격 → 5초 전송 주기에서 rLens 라디오 절감 최대화
+                        val priorityResult = gatt.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_LOW_POWER)
+                        Log.d(TAG, "Requested CONNECTION_PRIORITY_LOW_POWER: $priorityResult")
 
-                    onConnectionStateChanged(ConnectionState.CONNECTED)
+                        onConnectionStateChanged(ConnectionState.CONNECTED)
+                    } else {
+                        Log.e(TAG, "Exercise characteristic not found — recovering")
+                        gatt.disconnect()
+                    }
                 } else {
-                    Log.e(TAG, "Exercise characteristic not found")
-                    // 복구: 기존 disconnect→STATE_DISCONNECTED→scheduleReconnect 경로 재사용
-                    // (이 분기가 없으면 UI가 CONNECTING에 영구 고착)
+                    Log.e(TAG, "Service discovery failed: $status — recovering")
                     gatt.disconnect()
                 }
-            } else {
-                Log.e(TAG, "Service discovery failed: $status")
-                gatt.disconnect()
             }
         }
 
@@ -118,16 +130,18 @@ class RLensConnection(
             characteristic: BluetoothGattCharacteristic,
             status: Int
         ) {
-            val elapsed = System.currentTimeMillis() - lastWriteTime
-            Log.d(TAG, "onCharacteristicWrite: status=$status, elapsed=${elapsed}ms, queueSize=${writeQueue.size}")
+            handler.post {
+                val elapsed = System.currentTimeMillis() - lastWriteTime
+                Log.d(TAG, "onCharacteristicWrite: status=$status, elapsed=${elapsed}ms, queueSize=${writeQueue.size}")
 
-            // Exercise metrics callback: 다음 항목 처리
-            isWriting = false
-            if (status == BluetoothGatt.GATT_SUCCESS) {
-                processWriteQueue()
-            } else {
-                Log.e(TAG, "Write failed: $status")
-                writeQueue.clear()
+                // Exercise metrics callback: 다음 항목 처리
+                isWriting = false
+                if (status == BluetoothGatt.GATT_SUCCESS) {
+                    processWriteQueue()
+                } else {
+                    Log.e(TAG, "Write failed: $status")
+                    writeQueue.clear()
+                }
             }
         }
     }
@@ -137,6 +151,7 @@ class RLensConnection(
      */
     fun connect(device: BluetoothDevice) {
         lastDevice = device
+        intentionalDisconnect = false   // 새 연결: 이후 drop은 재연결 대상
         onConnectionStateChanged(ConnectionState.CONNECTING)
         // 재연결 경로(scheduleReconnect→connect)는 STATE_DISCONNECTED 후에도 gatt를 닫지 않아
         // 매 재연결마다 BluetoothGatt 핸들이 누수됨(Android ~30개 한계 → status 133). 새 인스턴스
@@ -150,6 +165,8 @@ class RLensConnection(
      * Disconnect from rLens
      */
     fun disconnect() {
+        intentionalDisconnect = true    // 늦게 오는 STATE_DISCONNECTED 콜백의 재연결 차단
+        lastDevice = null               // 재연결 lambda의 대상 제거(이중 방어)
         handler.removeCallbacksAndMessages(null)
         gatt?.disconnect()
         gatt?.close()
