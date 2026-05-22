@@ -62,13 +62,19 @@ class AltitudeProviderStepTest {
     }
 
     @Test
-    fun `non-finite hB never propagates NaN or Inf to output`() {
-        // Regression: the sanity guard must not emit hB + u when hB is garbage,
-        // otherwise NaN/Inf flows into the fused altitude. State must be untouched.
+    fun `invalid hB never propagates garbage to output`() {
+        // The sanity guard must not emit hB + u for ANY invalid hB. NaN/Inf AND finite
+        // out-of-range (|hB| >= 12000 m, e.g. corrupt baseline) are all sensor garbage:
+        // the fused altitude must stay finite and within a realistic range, state untouched.
         val s = AltitudeState(x1 = 1.0, x2 = 2.0, u = 3.0)
-        for (bad in listOf(Double.NaN, Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY)) {
+        val garbage = listOf(
+            Double.NaN, Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY,
+            50000.0, -20000.0, 12000.0,
+        )
+        for (bad in garbage) {
             val (next, out) = AltitudeProvider.step(s, hB = bad, hRef = 100.0, sigmaRef = 5.0, dt = 1.0)
             assertTrue("output must be finite for hB=$bad, got $out", out.isFinite())
+            assertTrue("output must stay within realistic range for hB=$bad, got $out", kotlin.math.abs(out) < 12000.0)
             assertEquals("garbage hB must not mutate state", s, next)
         }
     }

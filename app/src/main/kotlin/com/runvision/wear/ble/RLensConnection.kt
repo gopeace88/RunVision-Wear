@@ -60,7 +60,12 @@ class RLensConnection(
                     if (status == BluetoothGatt.GATT_SUCCESS) {
                         Log.d(TAG, "Connected to GATT server")
                         reconnectAttempts = 0
-                        gatt.discoverServices()
+                        // discoverServices()가 false면 초기화 실패 → onServicesDiscovered 콜백이
+                        // 보장되지 않아 CONNECTING에 고착. 같은 복구 경로(disconnect→재연결)로 보냄.
+                        if (!gatt.discoverServices()) {
+                            Log.e(TAG, "discoverServices() initiation failed — recovering")
+                            gatt.disconnect()
+                        }
                     } else {
                         // status≠SUCCESS인 CONNECTED = 실패한 연결. 깨진 링크에서 discoverServices
                         // 하지 말고 기존 disconnect→재연결 복구 경로로 보냄.
