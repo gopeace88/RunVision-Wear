@@ -59,7 +59,10 @@ class RLensConnection(
                 BluetoothProfile.STATE_CONNECTED -> {
                     if (status == BluetoothGatt.GATT_SUCCESS) {
                         Log.d(TAG, "Connected to GATT server")
-                        reconnectAttempts = 0
+                        // reconnectAttempts 리셋은 여기(저수준 링크 CONNECTED)가 아니라 exercise
+                        // characteristic 발견 후 CONNECTED emit 시점(onServicesDiscovered)에서 함.
+                        // discovery/characteristic이 지속 실패하면 매 사이클 1로 리셋돼 5s 빠른
+                        // 재연결만 무한 반복(60s 백오프 도달 못 함)하던 문제 방지.
                         // discoverServices()가 false면 초기화 실패 → onServicesDiscovered 콜백이
                         // 보장되지 않아 CONNECTING에 고착. 같은 복구 경로(disconnect→재연결)로 보냄.
                         if (!gatt.discoverServices()) {
@@ -90,6 +93,8 @@ class RLensConnection(
 
                 if (exerciseCharacteristic != null) {
                     Log.d(TAG, "Exercise characteristic found")
+                    // 연결이 실제로 사용 가능해진 시점에만 백오프 카운터 리셋.
+                    reconnectAttempts = 0
 
                     // LOW_POWER: 100~500ms 간격 → 5초 전송 주기에서 rLens 라디오 절감 최대화
                     val priorityResult = gatt.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_LOW_POWER)
