@@ -34,6 +34,7 @@ import com.runvision.wear.ui.screens.HomeScreen
 import com.runvision.wear.ui.screens.RunningScreen
 import com.runvision.wear.ui.theme.RunVisionWearTheme
 import androidx.wear.ambient.AmbientLifecycleObserver
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 /**
@@ -69,6 +70,10 @@ class MainActivity : ComponentActivity() {
     private var exerciseService: ExerciseService? = null
     private var serviceBound = false
     private var navController: NavHostController? = null
+
+    // onServiceConnected가 서비스 재시작 등으로 두 번 이상 호출되면 collector가 누적됨.
+    // 여기에 모아 재바인딩/해제 시 취소.
+    private val serviceCollectorJobs = mutableListOf<Job>()
 
     // Brightness dimming handler
     private val brightnessHandler = android.os.Handler(android.os.Looper.getMainLooper())
@@ -109,8 +114,12 @@ class MainActivity : ComponentActivity() {
                 isRunning.value = true  // This triggers navigation in Compose
             }
 
+            // 재바인딩 시 이전 collector를 먼저 취소(누적 방지). 첫 연결 땐 비어있어 no-op.
+            serviceCollectorJobs.forEach { it.cancel() }
+            serviceCollectorJobs.clear()
+
             // Observe Service's BLE connectionState (Service manages BLE lifecycle)
-            lifecycleScope.launch {
+            serviceCollectorJobs += lifecycleScope.launch {
                 lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
                     exerciseService?.connectionState?.collect { state ->
                         Log.d(TAG, "Service connectionState: $state")
@@ -120,28 +129,28 @@ class MainActivity : ComponentActivity() {
             }
 
             // Collect metrics from service
-            lifecycleScope.launch {
+            serviceCollectorJobs += lifecycleScope.launch {
                 lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
                     exerciseService?.metrics?.collect { m ->
                         metrics.value = m
                     }
                 }
             }
-            lifecycleScope.launch {
+            serviceCollectorJobs += lifecycleScope.launch {
                 lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
                     exerciseService?.cyclingMetrics?.collect { m ->
                         cyclingMetrics.value = m
                     }
                 }
             }
-            lifecycleScope.launch {
+            serviceCollectorJobs += lifecycleScope.launch {
                 lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
                     exerciseService?.cyclingSupported?.collect { s ->
                         cyclingSupported.value = s
                     }
                 }
             }
-            lifecycleScope.launch {
+            serviceCollectorJobs += lifecycleScope.launch {
                 lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
                     exerciseService?.cyclingStartFailed?.collect { f ->
                         cyclingStartFailed.value = f
@@ -149,7 +158,7 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            lifecycleScope.launch {
+            serviceCollectorJobs += lifecycleScope.launch {
                 lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
                     exerciseService?.isRunning?.collect { running ->
                         isRunning.value = running
@@ -159,7 +168,7 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            lifecycleScope.launch {
+            serviceCollectorJobs += lifecycleScope.launch {
                 lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
                     exerciseService?.isPaused?.collect { paused ->
                         isPaused.value = paused
@@ -167,7 +176,7 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            lifecycleScope.launch {
+            serviceCollectorJobs += lifecycleScope.launch {
                 lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
                     exerciseService?.isWaitingGpsLock?.collect { waiting ->
                         isWaitingGpsLock.value = waiting
@@ -178,6 +187,8 @@ class MainActivity : ComponentActivity() {
 
         override fun onServiceDisconnected(name: ComponentName?) {
             Log.d(TAG, "Service disconnected")
+            serviceCollectorJobs.forEach { it.cancel() }
+            serviceCollectorJobs.clear()
             exerciseService = null
             serviceBound = false
         }

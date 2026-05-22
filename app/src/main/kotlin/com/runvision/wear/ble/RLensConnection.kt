@@ -57,12 +57,19 @@ class RLensConnection(
         override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
             when (newState) {
                 BluetoothProfile.STATE_CONNECTED -> {
-                    Log.d(TAG, "Connected to GATT server")
-                    reconnectAttempts = 0
-                    gatt.discoverServices()
+                    if (status == BluetoothGatt.GATT_SUCCESS) {
+                        Log.d(TAG, "Connected to GATT server")
+                        reconnectAttempts = 0
+                        gatt.discoverServices()
+                    } else {
+                        // status≠SUCCESS인 CONNECTED = 실패한 연결. 깨진 링크에서 discoverServices
+                        // 하지 말고 기존 disconnect→재연결 복구 경로로 보냄.
+                        Log.e(TAG, "STATE_CONNECTED but status=$status — failed connect, recovering")
+                        gatt.disconnect()
+                    }
                 }
                 BluetoothProfile.STATE_DISCONNECTED -> {
-                    Log.d(TAG, "Disconnected from GATT server")
+                    Log.d(TAG, "Disconnected from GATT server (status=$status)")
                     exerciseCharacteristic = null
                     onConnectionStateChanged(ConnectionState.DISCONNECTED)
                     scheduleReconnect()
@@ -86,9 +93,13 @@ class RLensConnection(
                     onConnectionStateChanged(ConnectionState.CONNECTED)
                 } else {
                     Log.e(TAG, "Exercise characteristic not found")
+                    // 복구: 기존 disconnect→STATE_DISCONNECTED→scheduleReconnect 경로 재사용
+                    // (이 분기가 없으면 UI가 CONNECTING에 영구 고착)
+                    gatt.disconnect()
                 }
             } else {
                 Log.e(TAG, "Service discovery failed: $status")
+                gatt.disconnect()
             }
         }
 
@@ -117,6 +128,11 @@ class RLensConnection(
     fun connect(device: BluetoothDevice) {
         lastDevice = device
         onConnectionStateChanged(ConnectionState.CONNECTING)
+        // 재연결 경로(scheduleReconnect→connect)는 STATE_DISCONNECTED 후에도 gatt를 닫지 않아
+        // 매 재연결마다 BluetoothGatt 핸들이 누수됨(Android ~30개 한계 → status 133). 새 인스턴스
+        // 생성 직전 이전 것을 close. close→재할당 순서라 방금 만든 인스턴스를 닫을 위험 없음.
+        // disconnect() 후엔 gatt=null이라 이중 close도 발생하지 않음.
+        gatt?.close()
         gatt = device.connectGatt(context, false, gattCallback, BluetoothDevice.TRANSPORT_LE)
     }
 

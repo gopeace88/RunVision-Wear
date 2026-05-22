@@ -177,8 +177,12 @@ class AltitudeProvider(
             dt: Double,
         ): Pair<AltitudeState, Double> {
             // Defense: H_B sanity. NaN/Inf 또는 비현실적 범위면 propagate (sensor garbage 방어).
+            // hB가 NaN/Inf면 hB + s.u 도 NaN/Inf → 출력 유한성까지 확인해야 garbage가 전파되지 않음.
             if (!hB.isFinite() || kotlin.math.abs(hB) >= 12000.0) {
-                return s to (s.x1.let { if (it.isFinite()) hB + s.u else 0.0 })
+                return s to (s.x1.let { x1 ->
+                    val out = hB + s.u
+                    if (x1.isFinite() && out.isFinite()) out else 0.0
+                })
             }
             // H_REF sanity. GPS/DEM spike(±50000m 등) 방어. 비정상이면 ref 무시 → propagate.
             val validRef = hRef != null && sigmaRef != null && hRef.isFinite() && kotlin.math.abs(hRef) < 10000.0
