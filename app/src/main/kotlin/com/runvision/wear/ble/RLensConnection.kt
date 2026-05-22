@@ -86,9 +86,13 @@ class RLensConnection(
                     onConnectionStateChanged(ConnectionState.CONNECTED)
                 } else {
                     Log.e(TAG, "Exercise characteristic not found")
+                    // 복구: 기존 disconnect→STATE_DISCONNECTED→scheduleReconnect 경로 재사용
+                    // (이 분기가 없으면 UI가 CONNECTING에 영구 고착)
+                    gatt.disconnect()
                 }
             } else {
                 Log.e(TAG, "Service discovery failed: $status")
+                gatt.disconnect()
             }
         }
 
