@@ -220,6 +220,16 @@ class AltitudeProvider(
     // provider 수명 동안 유지(생성자에서 1회 생성). 누수 방지는 scope 자체가 아니라 in-flight
     // fetchJob을 stop()에서 취소해 처리 — scope를 cancel/recreate하면 GPS lock 대기 중 띄운
     // prewarm DEM fetch까지 죽어 초기 고도 기준이 사라지는 회귀가 생김.
+    //
+    // ⚠️ 불변식(깨면 stop() 보장 무너짐):
+    //  - 이 scope에 launch하는 곳은 pushGps()의 prewarm 단 한 곳뿐(아래). 두 번째 launch를
+    //    추가하려면 stop()의 fetchJob 취소 모델을 재설계할 것.
+    //  - fetchJob 접근(pushGps/stop)은 메인 스레드 단일(HS setUpdateCallback executor 미지정
+    //    → 콜백 메인, Service stop도 메인)이라 동기화 불필요. executor를 지정하게 되면 깨짐.
+    //  - 알려진 한계(보류): stop() 후 HS teardown 드레인 중 LOCATION 콜백이 pushGps를 부르면
+    //    (anchor 전 짧은 세션) prewarm fetch가 1회 더 발사될 수 있음 — 종료 후 불필요 네트워크
+    //    1회 + 짧은 context 보유(transient, crash/data-loss 아님). 깔끔한 차단은 ExerciseService
+    //    세션 lifecycle 조정 필요라 보류.
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     /** True if this device has a barometer. Callers degrade to GPS-only when false. */
