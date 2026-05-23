@@ -14,6 +14,7 @@ import androidx.compose.ui.unit.sp
 import androidx.wear.compose.material.Button
 import androidx.wear.compose.material.ButtonDefaults
 import androidx.wear.compose.material.Text
+import com.runvision.wear.BuildConfig
 import com.runvision.wear.ble.RLensConnection
 
 @Composable
@@ -105,6 +106,18 @@ fun HomeScreen(
             textAlign = TextAlign.Center,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Spacer(modifier = Modifier.height(6.dp))
+
+        // 앱 버전 (build.gradle versionName 자동 동기화)
+        Text(
+            text = "v${BuildConfig.VERSION_NAME}",
+            fontSize = 10.sp,
+            color = Color.Gray,
+            textAlign = TextAlign.Center,
+            maxLines = 1,
             modifier = Modifier.fillMaxWidth()
         )
     }
