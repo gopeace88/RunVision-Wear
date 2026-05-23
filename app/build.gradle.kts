@@ -54,6 +54,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true  // BuildConfig.VERSION_NAME 런타임 읽기용(홈 화면 버전 표시)
     }
 
     composeOptions {
