@@ -11,7 +11,6 @@ import com.runvision.wear.network.ElevationLookup
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -218,8 +217,10 @@ class AltitudeProvider(
     private val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
     private val pressureSensor: Sensor? = sensorManager.getDefaultSensor(Sensor.TYPE_PRESSURE)
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-    // stop()에서 cancel, start()에서 재생성(서비스가 인스턴스를 워크아웃마다 재사용).
-    private var scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    // provider 수명 동안 유지(생성자에서 1회 생성). 누수 방지는 scope 자체가 아니라 in-flight
+    // fetchJob을 stop()에서 취소해 처리 — scope를 cancel/recreate하면 GPS lock 대기 중 띄운
+    // prewarm DEM fetch까지 죽어 초기 고도 기준이 사라지는 회귀가 생김.
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     /** True if this device has a barometer. Callers degrade to GPS-only when false. */
     val hasBarometer: Boolean = pressureSensor != null
@@ -279,10 +280,8 @@ class AltitudeProvider(
         // 잘못된 weighted altitude로 reanchor.
         synchronized(anchorSamples) { anchorSamples.clear() }
         hasAnchoredThisSession = false
-        // 이전 stop()에서 취소된 scope를 새로 생성(DEM fetch 재사용 가능하게).
-        // cancel 후 재생성 — 이미 취소됐으면 no-op, 살아있으면 누수 없이 교체.
-        scope.cancel()
-        scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        // scope는 건드리지 않음 — GPS lock 대기 중 pushGps가 띄운 prewarm DEM fetch가
+        // start() 시점(cycling은 lock 후 호출)에 살아있어야 첫 샘플 기준 고도가 보존됨.
         sensorManager.registerListener(listener, pressureSensor, SensorManager.SENSOR_DELAY_NORMAL)
         Log.d(TAG, "AltitudeProvider started (state=${state})")
         return true
@@ -290,11 +289,10 @@ class AltitudeProvider(
 
     fun stop() {
         sensorManager.unregisterListener(listener)
-        // DEM fetch 및 scope 취소 — 미취소 시 in-flight 네트워크 fetch가 provider(→context)를
-        // 붙들어 process 종료까지 누수.
+        // in-flight DEM fetch만 취소 — 미취소 시 네트워크 fetch가 provider(→context)를 붙들어
+        // 누수. scope 자체는 빈 SupervisorJob이라 무해(provider와 함께 GC).
         fetchJob?.cancel()
         fetchJob = null
-        scope.cancel()
         persist()
         Log.d(TAG, "AltitudeProvider stopped (state=${state})")
     }
