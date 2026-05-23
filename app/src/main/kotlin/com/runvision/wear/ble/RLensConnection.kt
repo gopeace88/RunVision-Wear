@@ -65,6 +65,12 @@ class RLensConnection(
         // 모든 콜백 본문을 handler.post로 main looper에서 실행 → 공유 상태 단일 스레드 직렬화.
         override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
             handler.post {
+                // stale GATT 가드: connect()가 옛 gatt를 close/교체한 뒤 늦게 도착한 옛 인스턴스
+                // 콜백이 새 연결 상태를 건드리는 것 차단(false disconnect/reconnect 루프 방지).
+                if (gatt !== this@RLensConnection.gatt) {
+                    Log.d(TAG, "Ignoring stale GATT callback (onConnectionStateChange)")
+                    return@post
+                }
                 when (newState) {
                     BluetoothProfile.STATE_CONNECTED -> {
                         if (status == BluetoothGatt.GATT_SUCCESS) {
@@ -99,6 +105,10 @@ class RLensConnection(
 
         override fun onServicesDiscovered(gatt: BluetoothGatt, status: Int) {
             handler.post {
+                if (gatt !== this@RLensConnection.gatt) {
+                    Log.d(TAG, "Ignoring stale GATT callback (onServicesDiscovered)")
+                    return@post
+                }
                 if (status == BluetoothGatt.GATT_SUCCESS) {
                     // Get Exercise Data characteristic (v1.0.2: 5개 메트릭만 전송)
                     val exerciseService = gatt.getService(RLensProtocol.EXERCISE_SERVICE_UUID)
@@ -131,6 +141,10 @@ class RLensConnection(
             status: Int
         ) {
             handler.post {
+                if (gatt !== this@RLensConnection.gatt) {
+                    Log.d(TAG, "Ignoring stale GATT callback (onCharacteristicWrite)")
+                    return@post
+                }
                 val elapsed = System.currentTimeMillis() - lastWriteTime
                 Log.d(TAG, "onCharacteristicWrite: status=$status, elapsed=${elapsed}ms, queueSize=${writeQueue.size}")
 
