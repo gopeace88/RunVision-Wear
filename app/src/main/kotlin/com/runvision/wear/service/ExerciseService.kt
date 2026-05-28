@@ -225,7 +225,11 @@ class ExerciseService : Service() {
                     }
                 }
                 // Feeds DEM-cell lookup + fallback reference into AltitudeProvider.
-                altitudeProvider.pushGps(lat, lon, alt, sigma)
+                // CYCLING 전용 — 러닝 경로 불변: 러닝은 고도 미사용이므로 pushGps의 prewarm
+                // DEM fetch(Open-Meteo 네트워크)가 매 GPS 샘플마다 헛돌지 않도록 게이트.
+                if (mode == ExerciseMode.CYCLING) {
+                    altitudeProvider.pushGps(lat, lon, alt, sigma)
+                }
             }
             onStepsUpdate = { steps ->
                 Log.d(TAG, "Cadence update: $steps")
