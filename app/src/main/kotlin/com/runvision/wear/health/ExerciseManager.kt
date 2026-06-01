@@ -2,6 +2,9 @@ package com.runvision.wear.health
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
+import android.os.SystemClock
 import android.util.Log
 import androidx.health.services.client.ExerciseClient
 import androidx.health.services.client.ExerciseUpdateCallback
@@ -29,6 +32,13 @@ class ExerciseManager(context: Context) {
     private val measureClient: MeasureClient = healthServicesClient.measureClient
 
     private var isMeasuring = false
+    private var registrationRetryAttempted = false
+    private val registrationRetryHandler = Handler(Looper.getMainLooper())
+
+    var exerciseStartMs: Long = 0L
+        private set
+    var lastMetricElapsedMs: Long = 0L
+        private set
 
     var onHeartRateUpdate: ((Int) -> Unit)? = null
     var onLocationUpdate: ((Double, Double, Long) -> Unit)? = null
@@ -58,9 +68,13 @@ class ExerciseManager(context: Context) {
         }
     }
 
-    private val exerciseCallback = object : ExerciseUpdateCallback {
+    private val exerciseCallback: ExerciseUpdateCallback = object : ExerciseUpdateCallback {
         override fun onExerciseUpdateReceived(update: ExerciseUpdate) {
             Log.d(TAG, "Exercise update received, state: ${update.exerciseStateInfo.state}")
+
+            if (hasTrackedMetric(update)) {
+                lastMetricElapsedMs = SystemClock.elapsedRealtime()
+            }
 
             update.latestMetrics.getData(DataType.HEART_RATE_BPM)?.lastOrNull()?.let {
                 Log.d(TAG, "Heart rate: ${it.value}")
@@ -114,14 +128,39 @@ class ExerciseManager(context: Context) {
 
         override fun onRegistered() {
             Log.d(TAG, "Exercise callback registered")
+            registrationRetryAttempted = false
         }
 
         override fun onRegistrationFailed(throwable: Throwable) {
             Log.e(TAG, "Exercise callback registration failed", throwable)
+            if (!registrationRetryAttempted) {
+                registrationRetryAttempted = true
+                registrationRetryHandler.postDelayed({ retryCallbackRegistration() }, 1500L)
+            }
         }
 
         override fun onAvailabilityChanged(dataType: DataType<*, *>, availability: Availability) {
             Log.d(TAG, "Availability changed: $dataType -> $availability")
+        }
+    }
+
+    private fun hasTrackedMetric(update: ExerciseUpdate): Boolean {
+        return update.latestMetrics.getData(DataType.HEART_RATE_BPM).isNotEmpty() ||
+            update.latestMetrics.getData(DataType.LOCATION).isNotEmpty() ||
+            update.latestMetrics.getData(DataType.STEPS_PER_MINUTE).isNotEmpty() ||
+            update.latestMetrics.getData(DataType.STEPS).isNotEmpty() ||
+            update.latestMetrics.getData(DataType.DISTANCE_TOTAL)?.total != null
+    }
+
+    // Called at runtime (not during exerciseCallback construction) so referencing
+    // exerciseCallback here is safe — avoids the definite-assignment error that a
+    // direct self-reference inside onRegistrationFailed would cause.
+    private fun retryCallbackRegistration() {
+        try {
+            Log.d(TAG, "Retrying exercise callback registration once")
+            exerciseClient.setUpdateCallback(exerciseCallback)
+        } catch (e: Exception) {
+            Log.e(TAG, "Exercise callback retry failed", e)
         }
     }
 
@@ -275,10 +314,13 @@ class ExerciseManager(context: Context) {
                 .build()
 
             // Register callback first, then start exercise
+            registrationRetryAttempted = false
             exerciseClient.setUpdateCallback(exerciseCallback)
             Log.d(TAG, "Update callback set")
 
             exerciseClient.startExerciseAsync(config).await()
+            exerciseStartMs = SystemClock.elapsedRealtime()
+            lastMetricElapsedMs = 0L
             Log.d(TAG, "Exercise started successfully!")
             return true
 
@@ -324,5 +366,20 @@ class ExerciseManager(context: Context) {
         } catch (e: Exception) {
             Log.e(TAG, "Failed to end exercise", e)
         }
+    }
+
+    suspend fun getCurrentExerciseInfoAsync(): ExerciseInfo {
+        return exerciseClient.getCurrentExerciseInfoAsync().await()
+    }
+
+    suspend fun reregisterCallback() {
+        registrationRetryAttempted = false
+        exerciseClient.setUpdateCallback(exerciseCallback)
+        lastMetricElapsedMs = SystemClock.elapsedRealtime()
+        Log.d(TAG, "Exercise callback re-registered")
+    }
+
+    suspend fun restartExercise(type: ExerciseType): Boolean {
+        return startExercise(type)
     }
 }

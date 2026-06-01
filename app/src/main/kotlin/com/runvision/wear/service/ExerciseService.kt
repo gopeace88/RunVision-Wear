@@ -11,11 +11,13 @@ import android.os.Binder
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
+import android.os.SystemClock
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.LocusIdCompat
 import androidx.wear.ongoing.OngoingActivity
 import androidx.wear.ongoing.Status
+import androidx.health.services.client.data.ExerciseTrackedStatus
 import com.runvision.wear.MainActivity
 import com.runvision.wear.R
 import com.runvision.wear.ble.RLensConnection
@@ -60,6 +62,8 @@ class ExerciseService : Service() {
         const val EXTRA_MODE = "extra_mode"          // ExerciseMode.name
         const val EXTRA_CMD = "extra_cmd"
         const val CMD_START_SCAN = "cmd_start_scan"
+        private const val STALL_MS = 20_000L
+        private const val RECOVER_COOLDOWN_MS = 15_000L
     }
 
     private val binder = LocalBinder()
@@ -102,6 +106,8 @@ class ExerciseService : Service() {
 
     private var timerJob: Job? = null
     private var wakeLock: PowerManager.WakeLock? = null
+    private var lastRecoveryAttemptMs: Long = 0L
+    private var healthDistanceBaseMeters: Double = 0.0
 
     // Notification components - reuse for consistent Ongoing Activity
     private var notificationBuilder: NotificationCompat.Builder? = null
@@ -238,11 +244,12 @@ class ExerciseService : Service() {
                 }
             }
             onDistanceUpdate = { meters ->
-                Log.d(TAG, "Distance update: $meters m")
+                val adjustedMeters = healthDistanceBaseMeters + meters
+                Log.d(TAG, "Distance update: $meters m (adjusted=$adjustedMeters m)")
                 if (mode == ExerciseMode.CYCLING) {
-                    cyclingEngine.updateDistance(meters)
+                    cyclingEngine.updateDistance(adjustedMeters)
                 } else {
-                    runningEngine.updateDistance(meters)
+                    runningEngine.updateDistance(adjustedMeters)
                 }
             }
             onStepsDeltaUpdate = { steps ->
@@ -454,6 +461,8 @@ class ExerciseService : Service() {
             gpsLockCount = 0
             _isWaitingGpsLock.value = true
         }
+        healthDistanceBaseMeters = 0.0
+        lastRecoveryAttemptMs = 0L
 
         // Ensure foreground service is started (needed for auto-start from BLE callback)
         acquireWakeLock()
@@ -647,6 +656,7 @@ class ExerciseService : Service() {
             while (isActive) {
                 delay(1000)
                 tickCount++
+                checkMetricStreamWatchdog()
 
                 // === DIAGNOSTIC LOGGING ===
                 Log.d(TAG, "=== TICK $tickCount ===")
@@ -732,6 +742,55 @@ class ExerciseService : Service() {
                 }
             }
             Log.w(TAG, "Timer loop EXITED! isActive=$isActive")
+        }
+    }
+
+    private suspend fun checkMetricStreamWatchdog() {
+        if (!_isRunning.value || _isPaused.value) return
+
+        val now = SystemClock.elapsedRealtime()
+        val lastMetric = exerciseManager.lastMetricElapsedMs
+        val exerciseStart = exerciseManager.exerciseStartMs
+        val idleStall = lastMetric > 0L && now - lastMetric > STALL_MS
+        val firstSessionNoData = lastMetric == 0L && exerciseStart > 0L && now - exerciseStart > STALL_MS
+
+        if (!idleStall && !firstSessionNoData) return
+        if (now - lastRecoveryAttemptMs <= RECOVER_COOLDOWN_MS) return
+
+        val reason = if (idleStall) "idle stall" else "first-session no-data"
+        recoverMetricStream(reason, now)
+    }
+
+    private suspend fun recoverMetricStream(reason: String, now: Long) {
+        lastRecoveryAttemptMs = now
+        try {
+            val currentInfo = exerciseManager.getCurrentExerciseInfoAsync()
+            if (currentInfo.exerciseTrackedStatus == ExerciseTrackedStatus.OWNED_EXERCISE_IN_PROGRESS) {
+                Log.w(TAG, "Metric stream watchdog recovery ($reason): re-registering callback")
+                exerciseManager.reregisterCallback()
+            } else {
+                val snapshot = currentMetricsSnapshot()
+                Log.w(
+                    TAG,
+                    "Metric stream watchdog recovery ($reason): restarting Health Services " +
+                        "state=${currentInfo.exerciseTrackedStatus}, distance=${snapshot.distanceMeters}, elapsed=${snapshot.elapsedSeconds}"
+                )
+                val restarted = exerciseManager.restartExercise(mode.toExerciseType())
+                if (restarted) {
+                    healthDistanceBaseMeters = snapshot.distanceMeters.toDouble()
+                    // Running/cycling engines keep ticking across HS restart, so elapsed time remains continuous.
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Metric stream watchdog recovery failed", e)
+        }
+    }
+
+    private fun currentMetricsSnapshot(): RunningMetrics {
+        return if (mode == ExerciseMode.CYCLING) {
+            cyclingEngine.getRLensPayload()
+        } else {
+            runningEngine.getCurrentMetrics()
         }
     }
 
