@@ -11,6 +11,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -32,7 +33,7 @@ fun MetricItem(
             painter = icon,
             contentDescription = null,
             tint = color,
-            modifier = Modifier.size(44.dp)
+            modifier = Modifier.size(24.dp)
         )
         Spacer(modifier = Modifier.width(4.dp))
         Text(
@@ -42,6 +43,7 @@ fun MetricItem(
             color = Color.White,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth()
         )
     }
