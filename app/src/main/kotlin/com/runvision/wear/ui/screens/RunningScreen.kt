@@ -275,7 +275,7 @@ private fun InteractiveRunningScreen(
             }
             CompactButton(
                 onClick = onStopClick,
-                colors = ButtonDefaults.secondaryButtonColors()
+                colors = ButtonDefaults.primaryButtonColors()
             ) {
                 Icon(
                     painter = painterResource(R.drawable.ic_stop),
